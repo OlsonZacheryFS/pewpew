@@ -10,8 +10,12 @@
   - [loggers section](./config/loggers-section.md)
   - [endpoints section](./config/endpoints-section.md)
   - [Common types](./config/common-types.md)
+    - [Templates](./config/common-types/templates.md)
+    - [Queries](./config/common-types/queries.md)
     - [Expressions](./config/common-types/expressions.md)
 - [Command-line options](./cli.md)
 - [Viewing results](./viewing-results.md)
 - [Tuning a machine](./tuning.md)
 - [Found a bug?](./bug-report.md)
+
+[Differences from pewpew 0.5.x config](./old-version-diffs.md)
