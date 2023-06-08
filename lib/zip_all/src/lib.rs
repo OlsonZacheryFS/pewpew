@@ -259,6 +259,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
+
     use super::*;
     use futures::{executor::block_on_stream, stream, StreamExt};
     use std::collections::VecDeque;
