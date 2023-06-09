@@ -9,6 +9,7 @@ use boa_engine::{
 use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
 use std::collections::BTreeMap;
+use thiserror::Error;
 use zip_all::zip_all_map;
 
 // TODO: Fill in Error type
@@ -27,13 +28,13 @@ struct EvalExpr {
 }
 
 impl EvalExpr {
-    fn from_template<T>(template: Template<String, T, True, True>) -> Result<Self, ()>
+    fn from_template<T>(template: Template<String, T, True, True>) -> Result<Self, CreateExprError>
     where
         T: TemplateType,
         T::ProvAllowed: OK,
     {
         let Template::NeedsProviders { script, .. } = template else {
-            return Err(());
+            return Err(CreateExprError::LiteralForTemplate);
         };
 
         let mut needed = Vec::new();
@@ -53,7 +54,7 @@ impl EvalExpr {
                 .collect::<String>()
         );
         let mut ctx = default_context();
-        ctx.eval(script).unwrap();
+        ctx.eval(script).map_err(CreateExprError::BuildFnFailure)?;
         let efn: JsFunction =
             JsFunction::from_object(ctx.eval("____eval").unwrap().as_object().unwrap().clone())
                 .unwrap();
@@ -94,6 +95,13 @@ impl EvalExpr {
             )
         })
     }
+}
+
+#[derive(Debug, Error)]
+enum CreateExprError {
+    #[error("template provided was an already evaluated literal value")]
+    LiteralForTemplate,
+    BuildFnFailure(JsValue),
 }
 
 fn default_context() -> Context {
