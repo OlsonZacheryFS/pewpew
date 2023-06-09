@@ -12,13 +12,13 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 use zip_all::zip_all_map;
 
-// TODO: Fill in Error type
-type ProviderStreamStream<Ar> =
-    Box<dyn Stream<Item = Result<(serde_json::Value, Vec<Ar>), ()>> + Send + Unpin + 'static>;
+type ProviderStreamStream<Ar, E> =
+    Box<dyn Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + Unpin + 'static>;
 
 pub trait ProviderStream<Ar: Clone + Send + Unpin + 'static> {
-    #[allow(clippy::wrong_self_convention)]
-    fn into_stream(&self) -> ProviderStreamStream<Ar>;
+    type Err: Unpin + std::error::Error;
+
+    fn as_stream(&self) -> ProviderStreamStream<Ar, Self::Err>;
 }
 
 struct EvalExpr {
@@ -61,25 +61,36 @@ impl EvalExpr {
         Ok(Self { ctx, efn, needed })
     }
 
-    fn into_stream<P, Ar>(
+    fn into_stream<P, Ar, E>(
         mut self,
         providers: &BTreeMap<String, P>,
-    ) -> impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), ()>>
+    ) -> Result<impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>, IntoStreamError>
     where
-        P: ProviderStream<Ar> + Sized + 'static,
+        P: ProviderStream<Ar, Err = E> + Sized + 'static,
         Ar: Clone + Send + Unpin + 'static,
+        E: Unpin + std::error::Error,
     {
         let providers = std::mem::take(&mut self.needed)
             .into_iter()
-            .map(|pn| providers.get(&pn).map(|p| (pn, p.into_stream())).unwrap())
-            .collect::<BTreeMap<_, _>>();
-        zip_all_map(providers).map_ok(move |values| {
+            .map(|pn| {
+                providers
+                    .get(&pn)
+                    .map(|p| (pn.clone(), p.as_stream()))
+                    .ok_or_else(|| IntoStreamError::MissingProvider(pn.clone()))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        Ok(zip_all_map(providers).map_ok(move |values| {
             let ctx = &mut self.ctx;
 
             let values: BTreeMap<_, _> = values
                 .into_iter()
-                .map(|(n, (v, ar))| (n, (JsValue::from_json(&v, ctx).unwrap(), ar)))
-                .collect();
+                .map(|(n, (v, ar))| {
+                    JsValue::from_json(&v, ctx)
+                        .map_err(EvalExprError::InvalidJsonFromProvider)
+                        .map(|v| (n, (v, ar)))
+                })
+                .collect::<Result<_, _>>()
+                .unwrap();
             let mut object = ObjectInitializer::new(ctx);
             for (name, (value, _)) in values.iter() {
                 object.property(name.as_str(), value, Attribute::READONLY);
@@ -93,7 +104,7 @@ impl EvalExpr {
                     .unwrap(),
                 values.into_iter().flat_map(|v| v.1 .1).collect_vec(),
             )
-        })
+        }))
     }
 }
 
@@ -101,7 +112,20 @@ impl EvalExpr {
 enum CreateExprError {
     #[error("template provided was an already evaluated literal value")]
     LiteralForTemplate,
+    #[error("failure building JS function: {}", .0.display())]
     BuildFnFailure(JsValue),
+}
+
+#[derive(Debug, Error)]
+enum IntoStreamError {
+    #[error("missing provider: {0}")]
+    MissingProvider(String),
+}
+
+#[derive(Debug, Error)]
+enum EvalExprError {
+    #[error("provider returned invalid json: {}", .0.display())]
+    InvalidJsonFromProvider(JsValue),
 }
 
 fn default_context() -> Context {
