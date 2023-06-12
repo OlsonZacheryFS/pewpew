@@ -133,6 +133,7 @@ where
                 __dontuse,
             } => {
                 let s = template.insert_vars(vars)?.collapse();
+                // TODO: what if provs are allowed, but !v variant was used?
                 if T::ProvAllowed::VALUE {
                     Ok(Template::NeedsProviders {
                         script: s,
