@@ -20,7 +20,10 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Deserialize;
-use std::{collections::BTreeMap, convert::TryFrom, iter::FromIterator, str::FromStr, sync::Arc};
+use std::{
+    collections::BTreeMap, convert::TryFrom, error::Error as StdError, iter::FromIterator,
+    str::FromStr, sync::Arc,
+};
 use thiserror::Error;
 
 #[derive(Deserialize, PartialEq, Eq, Clone, Derivative)]
@@ -31,7 +34,9 @@ pub enum Template<
     T: TemplateType,
     VD: Bool, /* = <<T as TemplateType>::VarsAllowed as Bool>::Inverse*/
     ED: Bool = <<T as TemplateType>::EnvsAllowed as Bool>::Inverse,
-> {
+> where
+    <V as FromStr>::Err: StdError + 'static,
+{
     Literal {
         value: V,
     },
@@ -42,6 +47,9 @@ pub enum Template<
     },
     PreVars {
         template: TemplatedString<T>,
+        /// Determines "next" state after vars propagation, depending on if initial variant needed
+        /// provider values or not
+        next: fn(TemplatedString<T>) -> Result<Template<V, T, True, True>, super::VarsError>,
         #[derivative(Debug = "ignore")]
         __dontuse: (T::VarsAllowed, VD::Inverse),
     },
@@ -63,7 +71,7 @@ where
     where
         P: super::scripting::ProviderStream<Ar, Err = E> + 'static,
         Ar: Clone + Send + Unpin + 'static,
-        E: std::error::Error + Clone + Unpin + 'static,
+        E: StdError + Clone + Unpin + 'static,
     {
         match self {
             Self::Literal { value } => Either::A(futures::stream::repeat(Ok((
@@ -109,6 +117,7 @@ impl<VD: Bool> Template<String, EnvsOnly, VD, False> {
 impl<V: FromStr, T: TemplateType> Template<V, T, True, True>
 where
     <T::ProvAllowed as Bool>::Inverse: OK,
+    <V as FromStr>::Err: StdError,
 {
     fn get(&self) -> &V {
         match self {
@@ -121,7 +130,7 @@ where
 impl<V: FromStr, T: TemplateType> PropagateVars for Template<V, T, False, True>
 where
     T::VarsAllowed: OK,
-    V::Err: std::error::Error + 'static,
+    V::Err: StdError + 'static,
 {
     type Residual = Template<V, T, True, True>;
 
@@ -130,25 +139,11 @@ where
             Self::Literal { value } => Ok(Template::Literal { value }),
             Self::PreVars {
                 template,
+                next,
                 __dontuse,
             } => {
                 let s = template.insert_vars(vars)?.collapse();
-                // TODO: what if provs are allowed, but !v variant was used?
-                if T::ProvAllowed::VALUE {
-                    Ok(Template::NeedsProviders {
-                        script: s,
-                        __dontuse: TryDefault::try_default().unwrap(),
-                    })
-                } else {
-                    let s = s.try_collect().unwrap();
-                    s.parse()
-                        .map_err(|e: <V as FromStr>::Err| super::VarsError::InvalidString {
-                            typename: std::any::type_name::<V>(),
-                            from: s,
-                            error: e.into(),
-                        })
-                        .map(|v| Template::Literal { value: v })
-                }
+                next(s)
             }
             _ => unreachable!(),
         }
@@ -330,6 +325,8 @@ enum TemplateError {
 
 impl<V: FromStr, T: TemplateType, ED: Bool, VD: Bool> TryFrom<TemplateTmp<V, T>>
     for Template<V, T, ED, VD>
+where
+    <V as FromStr>::Err: StdError + 'static,
 {
     type Error = TemplateError;
 
@@ -343,10 +340,30 @@ impl<V: FromStr, T: TemplateType, ED: Bool, VD: Bool> TryFrom<TemplateTmp<V, T>>
             },
             TemplateTmp::Vars(template) => Self::PreVars {
                 template,
+                next: |s| {
+                    let s = s.try_collect().unwrap();
+                    s.parse()
+                        .map_err(|e: <V as FromStr>::Err| super::VarsError::InvalidString {
+                            typename: std::any::type_name::<V>(),
+                            from: s,
+                            error: e.into(),
+                        })
+                        .map(|v| Template::Literal { value: v })
+                },
                 __dontuse: TryDefault::try_default()
                     .map_err(|_| TemplateError::InvalidTypeTag("v"))?,
             },
-            _ => todo!(),
+            TemplateTmp::Script(template) => Self::PreVars {
+                template,
+                next: |s| {
+                    Ok(Template::NeedsProviders {
+                        script: s,
+                        __dontuse: TryDefault::try_default().unwrap(),
+                    })
+                },
+                __dontuse: TryDefault::try_default()
+                    .map_err(|_| TemplateError::InvalidTypeTag("s"))?,
+            },
         })
     }
 }
