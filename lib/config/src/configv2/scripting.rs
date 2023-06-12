@@ -79,7 +79,7 @@ impl EvalExpr {
                     .ok_or_else(|| IntoStreamError::MissingProvider(pn.clone()))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-        Ok(zip_all_map(providers).map_ok(move |values| {
+        Ok(zip_all_map(providers, true).map_ok(move |values| {
             let ctx = &mut self.ctx;
 
             let values: BTreeMap<_, _> = values
