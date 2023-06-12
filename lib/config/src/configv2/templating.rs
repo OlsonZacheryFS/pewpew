@@ -13,12 +13,14 @@
 
 use super::PropagateVars;
 use derivative::Derivative;
+use ether::Either;
+use futures::{Stream, TryStreamExt};
 pub use helpers::*;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Deserialize;
-use std::{collections::BTreeMap, convert::TryFrom, iter::FromIterator, str::FromStr};
+use std::{collections::BTreeMap, convert::TryFrom, iter::FromIterator, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 #[derive(Deserialize, PartialEq, Eq, Clone, Derivative)]
@@ -43,12 +45,44 @@ pub enum Template<
         #[derivative(Debug = "ignore")]
         __dontuse: (T::VarsAllowed, VD::Inverse),
     },
-    // needs more work done on this
     NeedsProviders {
         script: TemplatedString<T>,
         #[derivative(Debug = "ignore")]
         __dontuse: (ED, VD, T::ProvAllowed),
     },
+}
+
+impl<T: TemplateType> Template<String, T, True, True>
+where
+    T::ProvAllowed: OK,
+{
+    pub fn into_stream<P, Ar, E>(
+        self,
+        p: &BTreeMap<String, P>,
+    ) -> impl Stream<Item = Result<(Arc<serde_json::Value>, Vec<Ar>), E>>
+    where
+        P: super::scripting::ProviderStream<Ar, Err = E> + 'static,
+        Ar: Clone + Send + Unpin + 'static,
+        E: std::error::Error + Clone + Unpin + 'static,
+    {
+        match self {
+            Self::Literal { value } => Either::A(futures::stream::repeat(Ok((
+                Arc::new(serde_json::Value::String(value)),
+                vec![],
+            )))),
+            Self::NeedsProviders { script, .. } => Either::B(
+                super::scripting::EvalExpr::from_template(Self::NeedsProviders {
+                    script,
+                    __dontuse: TryDefault::try_default().unwrap(),
+                })
+                .unwrap()
+                .into_stream(p)
+                .unwrap()
+                .map_ok(|(v, ar)| (Arc::new(v), ar)),
+            ),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl<VD: Bool> Template<String, EnvsOnly, VD, False> {

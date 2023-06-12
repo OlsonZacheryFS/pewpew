@@ -8,7 +8,7 @@ use boa_engine::{
 };
 use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
-use std::collections::BTreeMap;
+use std::{cell::OnceCell, collections::BTreeMap};
 use thiserror::Error;
 use zip_all::zip_all_map;
 
@@ -21,14 +21,16 @@ pub trait ProviderStream<Ar: Clone + Send + Unpin + 'static> {
     fn as_stream(&self) -> ProviderStreamStream<Ar, Self::Err>;
 }
 
-struct EvalExpr {
+pub struct EvalExpr {
     ctx: Context,
     efn: JsFunction,
     needed: Vec<String>,
 }
 
 impl EvalExpr {
-    fn from_template<T>(template: Template<String, T, True, True>) -> Result<Self, CreateExprError>
+    pub fn from_template<T>(
+        template: Template<String, T, True, True>,
+    ) -> Result<Self, CreateExprError>
     where
         T: TemplateType,
         T::ProvAllowed: OK,
@@ -38,6 +40,7 @@ impl EvalExpr {
         };
 
         let mut needed = Vec::new();
+        let uses_p = OnceCell::new();
         let script = format!(
             "function ____eval(____provider_values){{ return {}; }}",
             script
@@ -46,6 +49,7 @@ impl EvalExpr {
                     TemplatePiece::Raw(s) => s,
                     TemplatePiece::Provider(p, ..) => {
                         let s = format!("____provider_values.{p}");
+                        let _ = uses_p.set(true);
                         needed.push(p);
                         s
                     }
@@ -53,6 +57,12 @@ impl EvalExpr {
                 })
                 .collect::<String>()
         );
+        if !uses_p.into_inner().unwrap_or(false) {
+            // TODO: warn that a script with no provider reads was used with logging.
+            eprintln!(
+                "this script doesn't read from any providers; consider a literal or vars template"
+            );
+        }
         let mut ctx = default_context();
         ctx.eval(script).map_err(CreateExprError::BuildFnFailure)?;
         let efn: JsFunction =
@@ -61,7 +71,7 @@ impl EvalExpr {
         Ok(Self { ctx, efn, needed })
     }
 
-    fn into_stream<P, Ar, E>(
+    pub fn into_stream<P, Ar, E>(
         mut self,
         providers: &BTreeMap<String, P>,
     ) -> Result<impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>, IntoStreamError>
@@ -109,7 +119,7 @@ impl EvalExpr {
 }
 
 #[derive(Debug, Error)]
-enum CreateExprError {
+pub enum CreateExprError {
     #[error("template provided was an already evaluated literal value")]
     LiteralForTemplate,
     #[error("failure building JS function: {}", .0.display())]
@@ -117,7 +127,7 @@ enum CreateExprError {
 }
 
 #[derive(Debug, Error)]
-enum IntoStreamError {
+pub enum IntoStreamError {
     #[error("missing provider: {0}")]
     MissingProvider(String),
 }
