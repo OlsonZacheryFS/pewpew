@@ -63,7 +63,7 @@ impl EvalExpr {
                 "this script doesn't read from any providers; consider a literal or vars template"
             );
         }
-        let mut ctx = default_context();
+        let mut ctx = builtins::get_default_context();
         ctx.eval(script).map_err(CreateExprError::BuildFnFailure)?;
         let efn: JsFunction =
             JsFunction::from_object(ctx.eval("____eval").unwrap().as_object().unwrap().clone())
@@ -138,6 +138,73 @@ enum EvalExprError {
     InvalidJsonFromProvider(JsValue),
 }
 
-fn default_context() -> Context {
-    Context::default()
+#[cfg(test)]
+mod tests {
+    use boa_engine::{Context, JsValue};
+
+    #[test]
+    fn test_default_context() {
+        let mut ctx: Context = super::builtins::get_default_context();
+        assert_eq!(ctx.eval(r#"parseInt("5")"#), Ok(JsValue::Integer(5)));
+        assert_eq!(ctx.eval(r#"parseFloat("5.1")"#), Ok(JsValue::Rational(5.1)));
+    }
+}
+
+#[scripting_macros::boa_mod]
+mod builtins {
+    use scripting_macros::boa_fn;
+    use std::str::FromStr;
+
+    #[boa_fn(jsname = "parseInt")]
+    pub fn parse_int(s: &str) -> Result<i64, <i64 as FromStr>::Err> {
+        s.parse()
+    }
+
+    #[boa_fn(jsname = "parseFloat")]
+    pub fn parse_float(s: &str) -> Option<f64> {
+        s.parse().ok()
+    }
+
+    mod helper {
+        use boa_engine::{Context, JsResult, JsValue};
+        use std::fmt::Display;
+
+        pub(super) trait GetAs<T> {
+            fn get_as(self, ctx: &mut Context) -> JsResult<T>;
+        }
+
+        impl<'a> GetAs<&'a str> for &'a JsValue {
+            fn get_as(self, ctx: &mut Context) -> JsResult<&'a str> {
+                Ok(self
+                    .as_string()
+                    .ok_or_else(|| ctx.construct_type_error("not a string"))?
+                    .as_str())
+            }
+        }
+
+        pub(super) trait AsJsResult {
+            fn as_js_result(self) -> JsResult<JsValue>;
+        }
+
+        impl<T> AsJsResult for Option<T>
+        where
+            JsValue: From<T>,
+        {
+            fn as_js_result(self) -> JsResult<JsValue> {
+                self.map(JsValue::from)
+                    .ok_or_else(|| JsValue::String("missing value".into()))
+            }
+        }
+
+        impl<T, E> AsJsResult for Result<T, E>
+        where
+            JsValue: From<T>,
+            E: Display,
+        {
+            fn as_js_result(self) -> JsResult<JsValue> {
+                self.map(JsValue::from)
+                    .map_err(|e| JsValue::String(e.to_string().into()))
+            }
+        }
+    }
 }
