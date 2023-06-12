@@ -76,7 +76,7 @@ where
         match self {
             Self::Literal { value } => Either::A(futures::stream::repeat(Ok((
                 Arc::new(serde_json::Value::String(value)),
-                vec![],
+                vec![], // TODO: what is the Vec<Ar> for?
             )))),
             Self::NeedsProviders { script, .. } => Either::B(
                 super::scripting::EvalExpr::from_template(Self::NeedsProviders {
