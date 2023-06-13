@@ -1,21 +1,22 @@
-use std::collections::{BTreeMap, VecDeque};
-
 use boa_engine::{
     object::{JsArray, ObjectInitializer},
     property::Attribute,
     Context, JsResult, JsValue,
 };
 use itertools::Itertools;
+use serde::Deserialize;
 use serde_json::Value as SJVal;
+use std::collections::{BTreeMap, VecDeque};
 
 // TODO: check if strings can be precompiled here
 // mainly: can you precompile a JS code that references the property "response" and execute it
 // multiple times, even if "response" is a different value
 
+#[derive(Debug, Deserialize)]
 struct Query {
     select: Select,
     for_each: Vec<String>,
-    r#where: String,
+    r#where: Option<String>,
 }
 
 impl Query {
@@ -31,10 +32,9 @@ impl Query {
         .collect::<Vec<_>>()
         .into_iter()
         .for_each(|(n, o)| ctx.register_global_property(n, o, Attribute::READONLY));
-        ctx.eval(&self.r#where)
-            .unwrap()
-            .as_boolean()
-            .unwrap()
+        self.r#where
+            .as_ref()
+            .map_or(true, |w| ctx.eval(w).unwrap().as_boolean().unwrap())
             .then(|| {
                 let for_each: Vec<VecDeque<JsValue>> = self
                     .for_each
@@ -82,6 +82,8 @@ impl Query {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
 enum Select {
     Expr(String),
     Map(BTreeMap<String, Self>),
@@ -115,7 +117,7 @@ mod tests {
     fn test_queries() {
         let q = Query {
             select: Select::Expr("response.body.session".to_owned()),
-            r#where: "response.status < 400".to_owned(),
+            r#where: Some("response.status < 400".to_owned()),
             for_each: vec![],
         };
         let response = serde_json::json! { {"body": {"session": "abc123"}, "status": 200} };
@@ -130,7 +132,7 @@ mod tests {
                 )]
                 .into(),
             ),
-            r#where: "true".to_owned(),
+            r#where: Some("true".to_owned()),
             for_each: vec!["response.body.characters".to_owned()],
         };
         let response = serde_json::json! {
