@@ -1,18 +1,27 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 
-use boa_engine::{object::JsArray, property::Attribute, Context, JsValue};
+use boa_engine::{
+    object::{JsArray, ObjectInitializer},
+    property::Attribute,
+    Context, JsResult, JsValue,
+};
 use itertools::Itertools;
 use serde_json::Value as SJVal;
 
+// TODO: check if strings can be precompiled here
+// mainly: can you precompile a JS code that references the property "response" and execute it
+// multiple times, even if "response" is a different value
+
 struct Query {
-    select: SJVal,
+    select: Select,
     for_each: Vec<String>,
     r#where: String,
 }
 
 impl Query {
     fn query(&self, request: SJVal, response: SJVal, stats: SJVal) -> Option<SJVal> {
-        let mut ctx = Context::default();
+        // maybe cache the same context (see TODO above)
+        let mut ctx = Context::default(); // grab the scripting context if the functions are needed
         IntoIterator::into_iter([
             ("request", &request),
             ("response", &response),
@@ -52,7 +61,7 @@ impl Query {
                     .map(|v| JsArray::from_iter(v, &mut ctx).into())
                     .collect_vec();
                 let for_each = if for_each.is_empty() {
-                    vec![JsValue::Null]
+                    vec![JsValue::Undefined]
                 } else {
                     for_each
                 };
@@ -61,8 +70,7 @@ impl Query {
                     .into_iter()
                     .map(|x| {
                         ctx.register_global_property("for_each", x, Attribute::READONLY);
-                        ctx.eval(self.select.as_str().expect("only doing String selects now"))
-                            .unwrap()
+                        self.select.select(&mut ctx).unwrap()
                     })
                     .collect_vec();
                 SJVal::Array(
@@ -74,6 +82,31 @@ impl Query {
     }
 }
 
+enum Select {
+    Expr(String),
+    Map(BTreeMap<String, Self>),
+}
+
+impl Select {
+    fn select(&self, ctx: &mut Context) -> JsResult<JsValue> {
+        match self {
+            Self::Expr(s) => ctx.eval(s),
+            Self::Map(m) => {
+                let m: BTreeMap<&str, JsValue> = m
+                    .iter()
+                    .map(|(k, v)| Ok((k.as_str(), v.select(ctx)?)))
+                    .collect::<JsResult<_>>()?;
+                let mut obj = ObjectInitializer::new(ctx);
+                for (k, v) in m {
+                    obj.property(k, v, Attribute::READONLY);
+                }
+
+                Ok(obj.build().into())
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,7 +114,7 @@ mod tests {
     #[test]
     fn test_queries() {
         let q = Query {
-            select: SJVal::String("response.body.session".to_owned()),
+            select: Select::Expr("response.body.session".to_owned()),
             r#where: "response.status < 400".to_owned(),
             for_each: vec![],
         };
@@ -90,7 +123,13 @@ mod tests {
         assert_eq!(res, SJVal::Array(vec![SJVal::String("abc123".to_owned())]));
 
         let q = Query {
-            select: SJVal::String("for_each[0].name".to_owned()),
+            select: Select::Map(
+                [(
+                    "name".to_owned(),
+                    Select::Expr("for_each[0].name".to_owned()),
+                )]
+                .into(),
+            ),
             r#where: "true".to_owned(),
             for_each: vec!["response.body.characters".to_owned()],
         };
@@ -128,7 +167,7 @@ mod tests {
         let res = q.query(SJVal::Null, response, SJVal::Null).unwrap();
         assert_eq!(
             res,
-            serde_json::json!(["Luke Skywalker", "Darth Vader", "R2-D2"])
+            serde_json::json!([{"name": "Luke Skywalker"}, {"name": "Darth Vader"}, {"name": "R2-D2"}])
         );
     }
 }
