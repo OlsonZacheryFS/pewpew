@@ -1,3 +1,4 @@
+use derive_more::Deref;
 use serde::Deserialize;
 use std::{convert::TryFrom, num::NonZeroU16, ops::Add};
 use thiserror::Error;
@@ -9,7 +10,21 @@ pub struct RangeProvider {
     end: i64,
     step: Step,
     repeat: bool,
-    unique: bool,
+    pub unique: bool,
+}
+
+impl IntoIterator for RangeProvider {
+    type Item = i64;
+    type IntoIter = Box<dyn Iterator<Item = i64> + Send>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let base = ((self.start)..=(self.end)).step_by(self.step.get() as usize);
+        if self.repeat {
+            Box::new(base.cycle())
+        } else {
+            Box::new(base)
+        }
+    }
 }
 
 impl Default for RangeProvider {
@@ -25,7 +40,7 @@ impl Default for RangeProvider {
 }
 
 /// Wrapper type for [`NonZeroU16`]
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deref)]
 #[serde(try_from = "u16")]
 struct Step(NonZeroU16);
 
@@ -44,12 +59,6 @@ impl TryFrom<u16> for Step {
 impl Default for Step {
     fn default() -> Self {
         Self(NonZeroU16::new(1).unwrap())
-    }
-}
-
-impl Step {
-    fn get(&self) -> u16 {
-        self.0.get()
     }
 }
 

@@ -1160,6 +1160,7 @@ fn get_providers_from_config(
             config::Provider::List(values) => providers::list(values.clone(), name),
         };*/
         let provider = match template.clone() {
+            ProviderType::Range(rg) => providers::range(*rg, name),
             ProviderType::File(f) => todo!("generate file provider"),
             _ => todo!("generate other provider"),
         };

@@ -12,6 +12,7 @@ mod list;
 mod range;
 
 pub use file::FileProvider;
+pub use range::RangeProvider;
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

@@ -9,6 +9,7 @@ use crate::line_writer::MsgType;
 use crate::util::{config_limit_to_channel_limit, json_value_to_string};
 use crate::TestEndReason;
 
+use config::configv2;
 use ether::Either3;
 use futures::{
     channel::mpsc::{self, channel, Sender as FCSender},
@@ -135,14 +136,14 @@ pub fn list(lp: config::ListProvider, name: &str) -> Provider {
 }
 
 // create a range provider
-pub fn range(rp: config::RangeProvider, name: &str) -> Provider {
-    debug!("providers::range={}", rp);
+pub fn range(rp: configv2::providers::RangeProvider, name: &str) -> Provider {
+    debug!("providers::range={:?}", rp);
     // create the channel for the provider
     let limit = channel::Limit::dynamic(5);
-    let (tx, rx) = channel::channel(limit, rp.unique(), name);
+    let (tx, rx) = channel::channel(limit, rp.unique, name);
 
     // create a new task that pushes data from the range into the channel
-    let prime_tx = stream::iter(rp.0.map(|v| Ok(v.into()))).forward(tx.clone());
+    let prime_tx = stream::iter(rp.into_iter().map(|v| Ok(v.into()))).forward(tx.clone());
     debug!("Provider::range tokio::spawn prime_tx");
     tokio::spawn(prime_tx);
 
@@ -266,7 +267,7 @@ mod tests {
     use super::*;
     use crate::line_writer::blocking_writer;
 
-    use config::FromYaml;
+    //use config::FromYaml;
     use futures::executor::{block_on, block_on_stream};
     use futures_timer::Delay;
     use json::json;
@@ -275,6 +276,11 @@ mod tests {
 
     use std::time::Duration;
 
+    #[test]
+    fn fix_the_range_provider_test() {
+        panic!("FIX_THE_RANGE_PROVIDER_TEST")
+    }
+    /*
     #[test]
     fn range_provider_works() {
         let rt = Runtime::new().unwrap();
@@ -332,6 +338,7 @@ mod tests {
             assert_eq!(values, expect, "third");
         });
     }
+    */
 
     #[test]
     fn literals_provider_works() {
