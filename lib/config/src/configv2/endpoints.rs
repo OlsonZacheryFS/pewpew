@@ -3,6 +3,7 @@
 use super::{
     common::{Duration, Headers},
     load_pattern::LoadPattern,
+    query::Query,
     templating::{Bool, False, Regular, Template, True, VarsOnly},
     PropagateVars,
 };
@@ -164,17 +165,14 @@ impl TryFrom<&str> for HitsPerMinute {
 
 #[derive(Debug, Deserialize)]
 struct EndpointProvides {
-    select: String, // Expressions are Strings for now
-    for_each: String,
-    r#where: String,
+    query: Query,
     send: super::common::ProviderSend,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(transparent)]
 struct EndpointLogs {
-    select: String, // Expressions are Strings for now
-    for_each: String,
-    r#where: String,
+    query: Query,
 }
 
 #[cfg(test)]

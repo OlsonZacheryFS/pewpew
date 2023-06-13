@@ -12,8 +12,8 @@ use std::collections::{BTreeMap, VecDeque};
 // mainly: can you precompile a JS code that references the property "response" and execute it
 // multiple times, even if "response" is a different value
 
-#[derive(Debug, Deserialize)]
-struct Query {
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+pub struct Query {
     select: Select,
     for_each: Vec<String>,
     r#where: Option<String>,
@@ -82,7 +82,7 @@ impl Query {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 enum Select {
     Expr(String),

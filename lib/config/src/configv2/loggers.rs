@@ -11,9 +11,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Logger<VD: Bool> {
-    select: Option<String>,
-    for_each: Option<String>,
-    r#where: Option<String>,
+    query: Option<super::query::Query>,
     to: LogTo<VD>,
     #[serde(default)]
     pretty: bool,
@@ -28,9 +26,7 @@ impl PropagateVars for Logger<False> {
 
     fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
         Ok(Logger {
-            select: self.select,
-            for_each: self.for_each,
-            r#where: self.r#where,
+            query: self.query,
             to: self.to.insert_vars(vars)?,
             pretty: self.pretty,
             limit: self.limit,
@@ -143,9 +139,7 @@ mod tests {
     #[test]
     fn test_logger_defaults() {
         let logger = from_yaml::<Logger<False>>("to:\n  type: stdout").unwrap();
-        assert_eq!(logger.select, None);
-        assert_eq!(logger.for_each, None);
-        assert_eq!(logger.r#where, None);
+        assert_eq!(logger.query, None);
         assert_eq!(logger.pretty, false);
         assert_eq!(logger.limit, 0);
         assert_eq!(logger.kill, false);
