@@ -1,11 +1,11 @@
 use super::templating::{Regular, Template};
+use derive_more::Deref;
 use serde::Deserialize;
 use std::{collections::BTreeMap, convert::TryFrom, str::FromStr, time::Duration as SDur};
-
 pub type Headers<VD> = BTreeMap<String, Template<String, Regular, VD>>;
 
 /// Newtype wrapper around [`std::time::Duration`] that allows implementing the needed traits.
-#[derive(Debug, Deserialize, PartialEq, Clone, Copy, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy, Eq, Deref)]
 #[serde(try_from = "&str")]
 pub struct Duration(SDur);
 

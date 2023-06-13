@@ -19,15 +19,18 @@ pub mod templating;
 
 pub mod common;
 
+pub use loggers::Logger;
+pub use providers::ProviderType;
+
 #[derive(Debug, Deserialize)]
-pub struct LoadTest<VD: Bool, ED: Bool> {
-    config: config::Config<VD>,
+pub struct LoadTest<VD: Bool = True, ED: Bool = True> {
+    pub config: config::Config<VD>,
     #[serde(bound = "load_pattern::LoadPattern<VD>: serde::de::DeserializeOwned")]
     load_pattern: load_pattern::LoadPattern<VD>,
     vars: Vars<ED>,
-    providers: BTreeMap<String, providers::ProviderType<VD>>,
-    loggers: BTreeMap<String, loggers::Logger<VD>>,
-    endpoints: BTreeMap<String, endpoints::Endpoint<VD>>,
+    pub providers: BTreeMap<String, ProviderType<VD>>,
+    pub loggers: BTreeMap<String, Logger<VD>>,
+    pub endpoints: Vec<endpoints::Endpoint<VD>>,
 }
 
 type Vars<ED> = BTreeMap<String, VarValue<ED>>;
@@ -116,6 +119,22 @@ impl LoadTest<True, True> {
             serde_yaml::from_str::<LoadTest<False, False>>(yaml)?.insert_env_vars(&env_vars)?;
         let vars = VarValue::Nested(std::mem::take(&mut pre_vars.vars));
         Ok(pre_vars.insert_vars(&vars)?)
+    }
+
+    pub fn clear_loggers(&mut self) {
+        todo!()
+    }
+
+    pub fn add_logger(&mut self, _: String, _: super::LoggerPreProcessed) -> Result<(), ()> {
+        todo!()
+    }
+
+    pub fn ok_for_loadtest(&self) -> Result<(), ()> {
+        todo!()
+    }
+
+    pub fn get_duration(&self) -> std::time::Duration {
+        todo!()
     }
 }
 

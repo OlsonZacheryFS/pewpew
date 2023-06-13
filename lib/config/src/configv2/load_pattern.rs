@@ -1,6 +1,7 @@
 use super::common::Duration;
 use super::templating::{Bool, False, Template, True, VarsOnly};
 use super::PropagateVars;
+use derive_more::Deref;
 use itertools::Itertools;
 use serde::Deserialize;
 use std::{
@@ -11,7 +12,7 @@ use thiserror::Error;
 
 /// Percentage type used for pewpew config files. Percentages can be zero, greater than 100, or
 /// fractional, but cannot be negatives, nans, or infinities.
-#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy, Deref)]
 #[serde(try_from = "&str")]
 pub struct Percent(f64);
 
@@ -70,6 +71,15 @@ impl TryFrom<&str> for Percent {
 #[serde(from = "Vec<LoadPatternTemp>")]
 #[serde(bound = "Self: From<Vec<LoadPatternTemp>>")]
 pub struct LoadPattern<VD: Bool>(Vec<LoadPatternSingle<VD>>);
+
+impl IntoIterator for LoadPattern<True> {
+    type Item = LoadPatternSingle<True>;
+    type IntoIter = <Vec<LoadPatternSingle<True>> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 impl PropagateVars for LoadPattern<False> {
     type Residual = LoadPattern<True>;

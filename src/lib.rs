@@ -13,6 +13,8 @@ mod util;
 use crate::error::TestError;
 use crate::stats::{create_stats_channel, create_try_run_stats_channel, StatsMessage};
 
+use config::configv2;
+
 use clap::{Args, Subcommand, ValueEnum};
 use ether::Either;
 use futures::{
@@ -463,8 +465,11 @@ async fn _create_run(
     log::trace!("env_vars={:?}", env_vars.clone());
     let output_format = exec_config.get_output_format();
     let config_file_path = exec_config.get_config_file().clone();
-    let mut config =
-        config::LoadTest::from_config(&config_bytes, exec_config.get_config_file(), &env_vars)?;
+    let mut config = configv2::LoadTest::from_yaml(
+        std::str::from_utf8(&config_bytes).expect("TODO: HANDLE THIS"),
+        &env_vars,
+    )
+    .expect("TODO");
     debug!("config::LoadTest::from_config finished");
     let test_runner = match exec_config {
         ExecConfig::Try(t) => {
@@ -475,7 +480,7 @@ async fn _create_run(
             // build and register the providers
             let (providers, _) = get_providers_from_config(
                 &config_providers,
-                config.config.general.auto_buffer_start_size,
+                config.config.general.auto_buffer_start_size as usize,
                 &test_ended_tx,
                 &r.config_file,
             )?;
@@ -662,7 +667,7 @@ fn create_config_watcher(
     run_config: RunConfig,
     config_file_path: PathBuf,
     stats_tx: FCUnboundedSender<StatsMessage>,
-    mut previous_config_providers: BTreeMap<String, config::Provider>,
+    mut previous_config_providers: BTreeMap<String, configv2::ProviderType>,
     mut previous_providers: Arc<BTreeMap<String, providers::Provider>>,
 ) {
     let start_time = Instant::now();
@@ -721,7 +726,10 @@ fn create_config_watcher(
             // A decent amount of this code seems similar to that in `_create_run`; could
             // this be unified into a common function?
 
-            let config = config::LoadTest::from_config(&config_bytes, &config_file_path, &env_vars);
+            let config = configv2::LoadTest::from_yaml(
+                std::str::from_utf8(&config_bytes).expect("TODO"),
+                &env_vars,
+            );
             let mut config = match config {
                 Ok(m) => m,
                 Err(e) => {
@@ -746,7 +754,7 @@ fn create_config_watcher(
             // build and register the providers
             let providers = get_providers_from_config(
                 &config_providers,
-                config.config.general.auto_buffer_start_size,
+                config.config.general.auto_buffer_start_size as usize,
                 &test_ended_tx,
                 &run_config.config_file,
             );
@@ -836,7 +844,7 @@ fn create_config_watcher(
 ///
 /// TODO.
 fn create_try_run_future(
-    mut config: config::LoadTest,
+    mut config: configv2::LoadTest,
     try_config: TryConfig,
     test_ended_tx: broadcast::Sender<Result<TestEndReason, TestError>>,
     stdout: FCSender<MsgType>,
@@ -881,14 +889,14 @@ fn create_try_run_future(
         config.clear_loggers();
     }
     debug!("try logger: {:?}", logger);
-    config.add_logger("try_run".into(), logger)?;
+    config.add_logger("try_run".into(), logger).expect("TODO");
 
     let config_config = config.config;
 
     // build and register the providers
     let (providers, response_providers) = get_providers_from_config(
         &config.providers,
-        config_config.general.auto_buffer_start_size,
+        config_config.general.auto_buffer_start_size as usize,
         &test_ended_tx,
         &try_config.config_file,
     )?;
@@ -962,7 +970,7 @@ fn create_try_run_future(
         endpoints.append(static_tags, builder, provides_set, required_providers);
     }
 
-    let client = create_http_client(config_config.client.keepalive)?;
+    let client = create_http_client(*config_config.client.keepalive)?;
 
     // create the stats channel
     let test_complete = BroadcastStream::new(test_ended_tx.subscribe());
@@ -1000,7 +1008,7 @@ fn create_try_run_future(
 ///
 /// Returns an `Err` if the config file is missing data that a full test requires.
 fn create_load_test_future(
-    config: config::LoadTest,
+    config: configv2::LoadTest,
     run_config: RunConfig,
     test_ended_tx: broadcast::Sender<Result<TestEndReason, TestError>>,
     providers: Arc<BTreeMap<String, providers::Provider>>,
@@ -1009,7 +1017,7 @@ fn create_load_test_future(
     stderr: FCSender<MsgType>,
 ) -> Result<impl Future<Output = ()>, TestError> {
     debug!("create_load_test_future start");
-    config.ok_for_loadtest()?;
+    config.ok_for_loadtest().expect("TODO");
 
     let mut duration = config.get_duration();
     if let Some(t) = run_config.start_at {
@@ -1041,22 +1049,18 @@ fn create_load_test_future(
                 (endpoint.peak_load.as_ref(), endpoint.load_pattern.take())
             {
                 let mut mod_interval2 = ModInterval::new();
-                let pieces = match load_pattern {
-                    config::LoadPattern::Linear(l) => l.pieces,
-                };
-                for piece in pieces {
-                    let (start, end) = match peak_load {
-                        config::HitsPer::Minute(m) => (
-                            PerX::minute(piece.start_percent * *m as f64),
-                            PerX::minute(piece.end_percent * *m as f64),
-                        ),
-                        config::HitsPer::Second(s) => (
-                            PerX::second(piece.start_percent * *s as f64),
-                            PerX::second(piece.end_percent * *s as f64),
+                for piece in load_pattern {
+                    use configv2::load_pattern::LoadPatternSingle;
+                    let (from, to, over) = match piece {
+                        LoadPatternSingle::Linear { from, to, over } => (
+                            PerX::minute(**peak_load.get() * **from.get()),
+                            PerX::minute(**peak_load.get() * **to.get()),
+                            over,
                         ),
                     };
-                    mod_interval2.append_segment(start, piece.duration, end);
+                    mod_interval2.append_segment(from, *over, to);
                 }
+
                 mod_interval = Some(Box::pin(mod_interval2.into_stream(run_config.start_at)));
             }
 
@@ -1064,7 +1068,7 @@ fn create_load_test_future(
         })
         .collect();
 
-    let client = create_http_client(config_config.client.keepalive)?;
+    let client = create_http_client(*config_config.client.keepalive)?;
 
     let mut builder_ctx = request::BuilderContext {
         config: config_config,
@@ -1121,7 +1125,7 @@ pub(crate) fn create_http_client(
 type ProvidersResult = Result<(BTreeMap<String, providers::Provider>, BTreeSet<String>), TestError>;
 
 fn get_providers_from_config(
-    config_providers: &BTreeMap<String, config::Provider>,
+    config_providers: &BTreeMap<String, configv2::ProviderType>,
     auto_size: usize,
     test_ended_tx: &broadcast::Sender<Result<TestEndReason, TestError>>,
     config_path: &Path,
@@ -1130,7 +1134,8 @@ fn get_providers_from_config(
     let mut response_providers = BTreeSet::new();
     let default_buffer_size = config::default_auto_buffer_start_size();
     for (name, template) in config_providers {
-        let provider = match template.clone() {
+        use configv2::providers::ProviderType;
+        /*let provider = match template.clone() {
             config::Provider::File(mut template) => {
                 // the auto_buffer_start_size is not the default
                 if auto_size != default_buffer_size {
@@ -1153,6 +1158,10 @@ fn get_providers_from_config(
                 providers::response(template, name)
             }
             config::Provider::List(values) => providers::list(values.clone(), name),
+        };*/
+        let provider = match template.clone() {
+            ProviderType::File(f) => todo!("generate file provider"),
+            _ => todo!("generate other provider"),
         };
         providers.insert(name.clone(), provider);
     }
@@ -1160,7 +1169,7 @@ fn get_providers_from_config(
 }
 
 fn get_loggers_from_config(
-    config_loggers: BTreeMap<String, config::Logger>,
+    config_loggers: BTreeMap<String, configv2::Logger>,
     results_dir: Option<&PathBuf>,
     test_ended_tx: &broadcast::Sender<Result<TestEndReason, TestError>>,
     stdout: &FCSender<MsgType>,
@@ -1168,15 +1177,16 @@ fn get_loggers_from_config(
 ) -> Result<BTreeMap<String, providers::Logger>, TestError> {
     config_loggers
         .into_iter()
-        .map(|(name, mut template)| {
-            let to = mem::take(&mut template.to);
+        .map(|(name, mut logger)| {
+            use configv2::loggers::LogTo;
+            //let to = mem::take(&mut logger.to);
             let name2 = name.clone();
-            let writer = match to.as_str() {
-                "stdout" => stdout.clone(),
-                "stderr" => stderr.clone(),
-                _ => {
+            let writer = match logger.to {
+                LogTo::Stdout => stdout.clone(),
+                LogTo::Stderr => stderr.clone(),
+                LogTo::File { path } => {
                     let mut file_path = results_dir.map_or_else(PathBuf::new, Clone::clone);
-                    file_path.push(to);
+                    file_path.push(path.get());
                     let f = File::create(&file_path)
                         .map_err(|e| TestError::CannotCreateLoggerFile(name2, e.into()))?;
                     blocking_writer(
@@ -1186,8 +1196,9 @@ fn get_loggers_from_config(
                     )
                     .0
                 }
+                LogTo::Raw { .. } => todo!(),
             };
-            let sender = providers::logger(template, test_ended_tx, writer);
+            let sender = providers::logger(logger, test_ended_tx, writer);
             Ok((name, sender))
         })
         .collect()

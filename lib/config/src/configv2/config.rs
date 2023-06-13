@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct Config<VD: Bool> {
-    client: Client<VD>,
-    general: General,
+    pub client: Client<VD>,
+    pub general: General,
 }
 
 impl PropagateVars for Config<False> {
@@ -27,13 +27,13 @@ impl PropagateVars for Config<False> {
 
 /// Customization Parameters for the HTTP client
 #[derive(Deserialize, Debug, PartialEq, Eq)]
-struct Client<VD: Bool> {
+pub struct Client<VD: Bool> {
     #[serde(default = "default_timeout")]
     request_timeout: Duration,
     #[serde(default = "BTreeMap::new")]
     headers: Headers<VD>,
     #[serde(default = "default_keepalive")]
-    keepalive: Duration,
+    pub keepalive: Duration,
 }
 
 impl PropagateVars for Client<False> {
@@ -54,9 +54,9 @@ impl PropagateVars for Client<False> {
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
-struct General {
+pub struct General {
     #[serde(default = "default_buffer_start_size")]
-    auto_buffer_start_size: u64,
+    pub auto_buffer_start_size: u64,
     #[serde(default = "default_bucket_size")]
     bucket_size: Duration,
     #[serde(default = "default_log_provider_stats")]

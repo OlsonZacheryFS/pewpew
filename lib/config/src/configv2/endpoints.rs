@@ -24,18 +24,19 @@ pub struct Endpoint<VD: Bool> {
     headers: Headers<VD>,
     body: Option<EndPointBody<VD>>,
     #[serde(bound = "LoadPattern<VD>: serde::de::DeserializeOwned")]
-    load_pattern: Option<LoadPattern<VD>>,
+    pub load_pattern: Option<LoadPattern<VD>>,
     #[serde(default)]
     method: Method,
-    peak_load: Option<Template<HitsPerMinute, VarsOnly, VD>>,
+    pub peak_load: Option<Template<HitsPerMinute, VarsOnly, VD>>,
     #[serde(default = "BTreeMap::new")]
-    tags: BTreeMap<String, Template<String, Regular, VD>>,
+    pub tags: BTreeMap<String, Template<String, Regular, VD>>,
     url: Template<String, Regular, VD>,
     #[serde(default)]
-    provides: BTreeMap<String, EndpointProvides>,
+    pub provides: BTreeMap<String, EndpointProvides>,
     // book says optional, check what the behavior should be and if this
     // should default
-    on_demand: Option<bool>,
+    #[serde(default)]
+    pub on_demand: bool,
     #[serde(default)]
     logs: BTreeMap<String, EndpointLogs>,
     max_parallel_requests: Option<u64>,
@@ -125,10 +126,10 @@ impl PropagateVars for MultiPartBodySection<False> {
 
 #[derive(Debug, Deserialize, PartialEq, PartialOrd, Deref)]
 #[serde(try_from = "&str")]
-struct HitsPerMinute(f64);
+pub struct HitsPerMinute(f64);
 
 #[derive(Debug, Error, PartialEq, Eq)]
-enum ParseHitsPerError {
+pub enum ParseHitsPerError {
     #[error("invalid hits per minute")]
     Invalid,
     #[error("hits per minute value too large")]
@@ -164,7 +165,7 @@ impl TryFrom<&str> for HitsPerMinute {
 }
 
 #[derive(Debug, Deserialize)]
-struct EndpointProvides {
+pub struct EndpointProvides {
     query: Query,
     send: super::common::ProviderSend,
 }
@@ -338,7 +339,7 @@ content:
             }
         );
         assert!(provides.is_empty());
-        assert_eq!(on_demand, None);
+        //assert_eq!(on_demand, None);
         assert!(logs.is_empty());
         assert_eq!(max_parallel_requests, None);
         assert_eq!(no_auto_returns, false);

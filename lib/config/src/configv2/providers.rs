@@ -11,9 +11,11 @@ mod file;
 mod list;
 mod range;
 
-#[derive(Debug, Deserialize)]
+pub use file::FileProvider;
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum ProviderType<VD: Bool> {
+pub enum ProviderType<VD: Bool = True> {
     File(file::FileProvider<VD>),
     Response {
         auto_return: Option<ProviderSend>,

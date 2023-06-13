@@ -119,7 +119,7 @@ where
     <T::ProvAllowed as Bool>::Inverse: OK,
     <V as FromStr>::Err: StdError,
 {
-    fn get(&self) -> &V {
+    pub fn get(&self) -> &V {
         match self {
             Self::Literal { value } => value,
             _ => unreachable!(),

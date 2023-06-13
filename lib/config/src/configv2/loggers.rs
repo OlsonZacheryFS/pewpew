@@ -10,9 +10,9 @@ use serde::Deserialize;
 // TODO: handle the queries better.
 
 #[derive(Debug, Deserialize)]
-pub struct Logger<VD: Bool> {
+pub struct Logger<VD: Bool = True> {
     query: Option<super::query::Query>,
-    to: LogTo<VD>,
+    pub to: LogTo<VD>,
     #[serde(default)]
     pretty: bool,
     #[serde(default)]
