@@ -341,6 +341,7 @@ dependencies = [
  "derive_more",
  "ether",
  "futures",
+ "gc",
  "http",
  "itertools",
  "js-sys",
