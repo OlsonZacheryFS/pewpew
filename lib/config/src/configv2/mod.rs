@@ -19,6 +19,7 @@ pub mod templating;
 
 pub mod common;
 
+pub use endpoints::Endpoint;
 pub use loggers::Logger;
 pub use providers::ProviderType;
 
@@ -30,7 +31,7 @@ pub struct LoadTest<VD: Bool = True, ED: Bool = True> {
     vars: Vars<ED>,
     pub providers: BTreeMap<String, ProviderType<VD>>,
     pub loggers: BTreeMap<String, Logger<VD>>,
-    pub endpoints: Vec<endpoints::Endpoint<VD>>,
+    pub endpoints: Vec<Endpoint<VD>>,
 }
 
 type Vars<ED> = BTreeMap<String, VarValue<ED>>;

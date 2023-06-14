@@ -17,7 +17,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Debug, Deserialize)]
-pub struct Endpoint<VD: Bool> {
+pub struct Endpoint<VD: Bool = True> {
     #[serde(default)]
     declare: BTreeMap<String, String>, // expressions are still Strings for now
     #[serde(default = "BTreeMap::new")]
