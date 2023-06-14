@@ -125,6 +125,13 @@ where
             _ => unreachable!(),
         }
     }
+
+    pub fn get_mut(&mut self) -> &mut V {
+        match self {
+            Self::Literal { value } => value,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl<V: FromStr, T: TemplateType> PropagateVars for Template<V, T, False, True>

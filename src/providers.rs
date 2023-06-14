@@ -58,31 +58,33 @@ impl Provider {
 // create a file provider. It takes a "test_killer" because a file provider has the means of killing a test
 // if it encounters an error while reading from the file
 pub fn file(
-    mut fp: config::FileProvider,
+    mut fp: configv2::providers::FileProvider,
     test_killer: broadcast::Sender<Result<TestEndReason, TestError>>,
     name: &str,
+    auto_buffer_start_size: usize,
 ) -> Result<Provider, TestError> {
-    let file = std::mem::take(&mut fp.path);
+    //let file = std::mem::take(&mut fp.path);
+    let file = fp.path.get();
     debug!("providers::file={}", file);
     let file2 = file.clone();
     // create a stream from the file that yields values
     let stream = match fp.format {
-        config::FileFormat::Csv => Either3::A(into_stream(
-            CsvReader::new(&fp, &file)
+        configv2::providers::FileReadFormat::Csv(csv) => Either3::A(into_stream(
+            CsvReader::new(&fp, &csv, &file)
                 .map_err(|e| TestError::CannotOpenFile(file.into(), e.into()))?,
         )),
-        config::FileFormat::Json => Either3::B(into_stream(
+        configv2::providers::FileReadFormat::Json => Either3::B(into_stream(
             JsonReader::new(&fp, &file)
                 .map_err(|e| TestError::CannotOpenFile(file.into(), e.into()))?,
         )),
-        config::FileFormat::Line => Either3::C(into_stream(
+        configv2::providers::FileReadFormat::Line => Either3::C(into_stream(
             LineReader::new(&fp, &file)
                 .map_err(|e| TestError::CannotOpenFile(file.into(), e.into()))?,
         )),
     };
 
     // create the channel for the provider
-    let limit = config_limit_to_channel_limit(fp.buffer);
+    let limit = config_limit_to_channel_limit(fp.buffer, auto_buffer_start_size);
     let (tx, rx) = channel::channel(limit, fp.unique, name);
     let tx2 = tx.clone();
 
@@ -104,17 +106,21 @@ pub fn file(
     debug!("Provider::file tokio::spawn primer_task");
     tokio::spawn(primer_task);
 
-    Ok(Provider::new(fp.auto_return, rx, tx))
+    Ok(Provider::new(fp.auto_return.map(Into::into), rx, tx))
 }
 
 // create a response provider
-pub fn response(rp: config::ResponseProvider, name: &str) -> Provider {
+pub fn response(
+    rp: configv2::providers::ResponseProvider,
+    name: &str,
+    auto_buffer_start_size: usize,
+) -> Provider {
     debug!("providers::response={:?}", rp);
     // create the channel for the provider
-    let limit = config_limit_to_channel_limit(rp.buffer);
+    let limit = config_limit_to_channel_limit(rp.buffer, auto_buffer_start_size);
     let (tx, rx) = channel::channel(limit, rp.unique, name);
 
-    Provider::new(rp.auto_return, rx, tx)
+    Provider::new(rp.auto_return.map(From::from), rx, tx)
 }
 
 // create a list provider
@@ -456,6 +462,12 @@ mod tests {
     */
 
     #[test]
+    fn fix_response_provider_test() {
+        todo!("FIX THE RESPONSE PROVIDER TEST")
+    }
+
+    /*
+    #[test]
     fn response_provider_works() {
         let jsons = vec![json!(1), json!(2), json!(3)];
         let rp = config::ResponseProvider {
@@ -510,6 +522,7 @@ mod tests {
 
         assert_eq!(values, expects);
     }
+    */
 
     #[test]
     fn basic_logger_works() {

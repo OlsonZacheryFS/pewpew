@@ -11,7 +11,7 @@ mod file;
 mod list;
 mod range;
 
-pub use file::FileProvider;
+pub use file::{CsvHeaders, CsvParams, FileProvider, FileReadFormat};
 pub use list::ListProvider;
 pub use range::RangeProvider;
 
@@ -19,15 +19,18 @@ pub use range::RangeProvider;
 #[serde(rename_all = "snake_case")]
 pub enum ProviderType<VD: Bool = True> {
     File(file::FileProvider<VD>),
-    Response {
-        auto_return: Option<ProviderSend>,
-        #[serde(default)]
-        buffer: BufferLimit,
-        #[serde(default)]
-        unique: bool,
-    },
+    Response(ResponseProvider),
     List(ListProvider),
     Range(range::RangeProvider),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+pub struct ResponseProvider {
+    pub auto_return: Option<ProviderSend>,
+    #[serde(default)]
+    pub buffer: BufferLimit,
+    #[serde(default)]
+    pub unique: bool,
 }
 
 impl PropagateVars for ProviderType<False> {
@@ -38,15 +41,7 @@ impl PropagateVars for ProviderType<False> {
             Self::File(fp) => fp.insert_vars(vars).map(ProviderType::File),
             Self::Range(r) => Ok(ProviderType::Range(r)),
             Self::List(l) => Ok(ProviderType::List(l)),
-            Self::Response {
-                auto_return,
-                buffer,
-                unique,
-            } => Ok(ProviderType::Response {
-                auto_return,
-                buffer,
-                unique,
-            }),
+            Self::Response(r) => Ok(ProviderType::Response(r)),
         }
     }
 }
@@ -104,11 +99,11 @@ mod tests {
     fn test_provider_type_response() {
         static TEST1: &str = "!response";
 
-        let ProviderType::<False>::Response {
+        let ProviderType::<False>::Response( ResponseProvider {
             auto_return,
             buffer,
             unique,
-        } = from_yaml(TEST1).unwrap() else {
+        }) = from_yaml(TEST1).unwrap() else {
             panic!("was not response")
         };
         assert_eq!(auto_return, None);
@@ -122,11 +117,11 @@ mod tests {
   unique: true
         "#;
 
-        let ProviderType::<False>::Response {
+        let ProviderType::<False>::Response(ResponseProvider {
             auto_return,
             buffer,
             unique,
-        } = from_yaml(TEST2).unwrap() else {
+        }) = from_yaml(TEST2).unwrap() else {
             panic!("was not response")
         };
         assert_eq!(auto_return, Some(ProviderSend::Block));

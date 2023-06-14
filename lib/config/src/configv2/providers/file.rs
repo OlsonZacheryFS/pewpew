@@ -5,19 +5,19 @@ use crate::configv2::PropagateVars;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
-pub struct FileProvider<VD: Bool> {
-    path: Template<String, VarsOnly, VD>,
+pub struct FileProvider<VD: Bool = True> {
+    pub path: Template<String, VarsOnly, VD>,
     #[serde(default)]
-    repeat: bool,
+    pub repeat: bool,
     #[serde(default)]
-    unique: bool,
-    auto_return: Option<ProviderSend>,
+    pub unique: bool,
+    pub auto_return: Option<ProviderSend>,
     #[serde(default)]
-    buffer: BufferLimit,
+    pub buffer: BufferLimit,
     #[serde(default)]
-    format: FileReadFormat,
+    pub format: FileReadFormat,
     #[serde(default)]
-    random: bool,
+    pub random: bool,
 }
 
 impl PropagateVars for FileProvider<False> {
@@ -62,32 +62,29 @@ pub enum FileReadFormat {
     Json,
     /// Read the file as a CSV, with each line being a record, and the first line possibly being
     /// the headers.
-    Csv {
-        comment: Option<char>,
-        #[serde(default = "default_csv_delimiter")]
-        delimiter: char,
-        #[serde(default = "default_double_quote")]
-        double_quote: bool,
-        escape: Option<char>,
-        #[serde(default)]
-        headers: CsvHeaders,
-        #[serde(default)]
-        terminator: CsvLineTerminator,
-        #[serde(default = "default_csv_quote")]
-        quote: char,
-    },
+    Csv(CsvParams),
 }
 
-const fn default_csv_delimiter() -> char {
-    ','
+#[derive(Debug, Deserialize, PartialEq, Eq, Default, Clone)]
+pub struct CsvParams {
+    // TODO: deserialize u8 from char
+    pub comment: Option<u8>,
+    // TODO: deserialize u8 from char
+    pub delimiter: Option<u8>,
+    #[serde(default = "default_double_quote")]
+    pub double_quote: bool,
+    // TODO: deserialize u8 from char
+    pub escape: Option<u8>,
+    #[serde(default)]
+    pub headers: CsvHeaders,
+    // TODO: deserialize u8 from char
+    pub terminator: Option<u8>,
+    // TODO: deserialize u8 from char
+    pub quote: Option<u8>,
 }
 
 const fn default_double_quote() -> bool {
     true
-}
-
-const fn default_csv_quote() -> char {
-    '"'
 }
 
 /// Define what, if any, headers should be used for each CSV record.
@@ -103,25 +100,6 @@ pub enum CsvHeaders {
 impl Default for CsvHeaders {
     fn default() -> Self {
         Self::Use(false)
-    }
-}
-
-/// Define what is counted as a terminator that separates multiple CSV records.
-#[derive(Deserialize, Debug, PartialEq, Eq, Default, Clone, Copy)]
-#[serde(from = "Option<char>")]
-pub enum CsvLineTerminator {
-    /// Use the provided char
-    Provided(char),
-    /// Any of the sequences "\n", "\r", or "\r\n" count as a terminator
-    #[default]
-    JustUseAnyLineEnding,
-}
-
-impl From<Option<char>> for CsvLineTerminator {
-    fn from(value: Option<char>) -> Self {
-        value
-            .map(Self::Provided)
-            .unwrap_or(Self::JustUseAnyLineEnding)
     }
 }
 
@@ -144,14 +122,6 @@ mod tests {
     }
 
     #[test]
-    fn test_csv_terminator() {
-        let ct = from_yaml::<CsvLineTerminator>("a").unwrap();
-        assert_eq!(ct, CsvLineTerminator::Provided('a'));
-        let ct = from_yaml::<CsvLineTerminator>("").unwrap();
-        assert_eq!(ct, CsvLineTerminator::JustUseAnyLineEnding);
-    }
-
-    #[test]
     fn test_file_read_format_basic() {
         let frf = from_yaml::<FileReadFormat>("!line").unwrap();
         assert_eq!(frf, FileReadFormat::Line);
@@ -163,38 +133,38 @@ mod tests {
     fn test_file_read_format_csv() {
         // defaults
         let frf = from_yaml::<FileReadFormat>("!csv").unwrap();
-        let FileReadFormat::Csv {
-            comment,
+        let FileReadFormat::Csv (
+            CsvParams {comment,
             delimiter,
             double_quote,
             escape,
             headers,
             terminator,
             quote,
-        } = frf else { panic!("was not csv") };
+        }) = frf else { panic!("was not csv") };
         assert_eq!(comment, None);
-        assert_eq!(delimiter, ',');
+        assert_eq!(delimiter, None);
         assert_eq!(double_quote, true);
         assert_eq!(escape, None);
         assert_eq!(headers, CsvHeaders::Use(false));
-        assert_eq!(terminator, CsvLineTerminator::JustUseAnyLineEnding);
-        assert_eq!(quote, '"');
+        assert_eq!(terminator, None);
+        assert_eq!(quote, None);
 
         // filled
         let frf = from_yaml::<FileReadFormat>(
             r##"
 !csv
-  comment: "#"
+  comment: 65
   delimiter: ;
   double_quote: false
-  escape: \
+  escape: 10
   headers: true
-  terminator: $
-  quote: "'"
+  terminator: 55
+  quote: 75
         "##,
         )
         .unwrap();
-        let FileReadFormat::Csv {
+        let FileReadFormat::Csv (CsvParams{
             comment,
             delimiter,
             double_quote,
@@ -202,14 +172,14 @@ mod tests {
             headers,
             terminator,
             quote,
-        } = frf else { panic!("was not csv") };
-        assert_eq!(comment, Some('#'));
-        assert_eq!(delimiter, ';');
+        }) = frf else { panic!("was not csv") };
+        assert_eq!(comment, Some(65));
+        assert_eq!(delimiter, None);
         assert_eq!(double_quote, false);
-        assert_eq!(escape, Some('\\'));
+        assert_eq!(escape, Some(10));
         assert_eq!(headers, CsvHeaders::Use(true));
-        assert_eq!(terminator, CsvLineTerminator::Provided('$'));
-        assert_eq!(quote, '\'');
+        assert_eq!(terminator, Some(55));
+        assert_eq!(quote, Some(75));
 
         // array headers
         let frf = from_yaml(
@@ -221,7 +191,7 @@ mod tests {
         "#,
         )
         .unwrap();
-        let FileReadFormat::Csv {
+        let FileReadFormat::Csv(CsvParams {
             comment,
             delimiter,
             double_quote,
@@ -229,17 +199,17 @@ mod tests {
             headers,
             terminator,
             quote,
-        } = frf else { panic!("was not csv") };
+        }) = frf else { panic!("was not csv") };
         assert_eq!(comment, None);
-        assert_eq!(delimiter, ',');
+        assert_eq!(delimiter, None);
         assert_eq!(double_quote, true);
         assert_eq!(escape, None);
         assert_eq!(
             headers,
             CsvHeaders::Provide(vec!["foo".to_owned(), "bar".to_owned()])
         );
-        assert_eq!(terminator, CsvLineTerminator::JustUseAnyLineEnding);
-        assert_eq!(quote, '"');
+        assert_eq!(terminator, None);
+        assert_eq!(quote, None);
     }
 
     #[test]
@@ -327,7 +297,7 @@ format: !csv
         assert_eq!(auto_return, None);
         assert_eq!(buffer, BufferLimit::Auto);
         assert_eq!(random, false);
-        let FileReadFormat::Csv {
+        let FileReadFormat::Csv(CsvParams {
             comment,
             delimiter,
             double_quote,
@@ -335,16 +305,16 @@ format: !csv
             headers,
             terminator,
             quote,
-        } = format else { panic!("was not csv") };
+        }) = format else { panic!("was not csv") };
         assert_eq!(comment, None);
-        assert_eq!(delimiter, ',');
+        assert_eq!(delimiter, None);
         assert_eq!(double_quote, true);
         assert_eq!(escape, None);
         assert_eq!(
             headers,
             CsvHeaders::Provide(vec!["foo".to_owned(), "bar".to_owned()])
         );
-        assert_eq!(terminator, CsvLineTerminator::JustUseAnyLineEnding);
-        assert_eq!(quote, '"');
+        assert_eq!(terminator, None);
+        assert_eq!(quote, None);
     }
 }

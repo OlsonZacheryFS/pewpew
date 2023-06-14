@@ -42,6 +42,16 @@ pub enum ProviderSend {
     IfNotFull,
 }
 
+impl From<ProviderSend> for crate::configv1::EndpointProvidesSendOptions {
+    fn from(value: ProviderSend) -> Self {
+        match value {
+            ProviderSend::Block => Self::Block,
+            ProviderSend::Force => Self::Force,
+            ProviderSend::IfNotFull => Self::IfNotFull,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

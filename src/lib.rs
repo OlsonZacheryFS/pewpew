@@ -1135,35 +1135,17 @@ fn get_providers_from_config(
     let default_buffer_size = config::default_auto_buffer_start_size();
     for (name, template) in config_providers {
         use configv2::providers::ProviderType;
-        /*let provider = match template.clone() {
-            config::Provider::File(mut template) => {
-                // the auto_buffer_start_size is not the default
-                if auto_size != default_buffer_size {
-                    if let config::Limit::Dynamic(_) = &template.buffer {
-                        template.buffer = config::Limit::Dynamic(auto_size);
-                    }
-                }
-                util::tweak_path(&mut template.path, config_path);
-                providers::file(template, test_ended_tx.clone(), name)?
-            }
-            config::Provider::Range(range) => providers::range(range, name),
-            config::Provider::Response(mut template) => {
-                // the auto_buffer_start_size is not the default
-                if auto_size != default_buffer_size {
-                    if let config::Limit::Dynamic(_) = &template.buffer {
-                        template.buffer = config::Limit::Dynamic(auto_size);
-                    }
-                }
-                response_providers.insert(name.clone());
-                providers::response(template, name)
-            }
-            config::Provider::List(values) => providers::list(values.clone(), name),
-        };*/
         let provider = match template.clone() {
             ProviderType::Range(rg) => providers::range(*rg, name),
             ProviderType::List(lp) => providers::list(*lp, name),
-            ProviderType::File(f) => todo!("generate file provider"),
-            _ => todo!("generate other provider"),
+            ProviderType::File(mut f) => {
+                util::tweak_path(f.path.get_mut(), config_path);
+                providers::file(f, test_ended_tx.clone(), name, auto_size)?
+            }
+            ProviderType::Response(r) => {
+                response_providers.insert(name.clone());
+                providers::response(*r, name, auto_size)
+            }
         };
         providers.insert(name.clone(), provider);
     }
