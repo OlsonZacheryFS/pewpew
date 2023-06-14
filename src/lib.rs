@@ -1161,6 +1161,7 @@ fn get_providers_from_config(
         };*/
         let provider = match template.clone() {
             ProviderType::Range(rg) => providers::range(*rg, name),
+            ProviderType::List(lp) => providers::list(*lp, name),
             ProviderType::File(f) => todo!("generate file provider"),
             _ => todo!("generate other provider"),
         };

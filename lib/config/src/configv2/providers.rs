@@ -12,6 +12,7 @@ mod list;
 mod range;
 
 pub use file::FileProvider;
+pub use list::ListProvider;
 pub use range::RangeProvider;
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -25,7 +26,7 @@ pub enum ProviderType<VD: Bool = True> {
         #[serde(default)]
         unique: bool,
     },
-    List(list::ListProvider),
+    List(ListProvider),
     Range(range::RangeProvider),
 }
 

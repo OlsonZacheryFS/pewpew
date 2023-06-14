@@ -1,13 +1,13 @@
+use rand::seq::SliceRandom;
 use serde::Deserialize;
 
-/// Should hold json objects; just Strings for now
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(from = "ListProviderTmp")]
 pub struct ListProvider {
-    values: Vec<String>,
+    values: Vec<serde_json::Value>,
     random: bool,
     repeat: bool,
-    unique: bool,
+    pub unique: bool,
 }
 
 impl Default for ListProvider {
@@ -21,12 +21,32 @@ impl Default for ListProvider {
     }
 }
 
+impl IntoIterator for ListProvider {
+    type Item = serde_json::Value;
+    type IntoIter = Box<dyn Iterator<Item = serde_json::Value> + Send>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let mut values = self.values;
+        match (self.repeat, self.random) {
+            (false, false) => Box::new(values.into_iter()),
+            (true, false) => Box::new(values.into_iter().cycle()),
+            (false, true) => {
+                values.shuffle(&mut rand::thread_rng());
+                Box::new(values.into_iter())
+            }
+            (true, true) => Box::new(std::iter::from_fn(move || {
+                values.choose(&mut rand::thread_rng()).cloned()
+            })),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 enum ListProviderTmp {
-    JustAList(Vec<String>),
+    JustAList(Vec<serde_json::Value>),
     Defined {
-        values: Vec<String>,
+        values: Vec<serde_json::Value>,
         #[serde(default)]
         random: bool,
         #[serde(default = "default_repeat")]

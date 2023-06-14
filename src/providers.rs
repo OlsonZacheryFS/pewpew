@@ -118,10 +118,10 @@ pub fn response(rp: config::ResponseProvider, name: &str) -> Provider {
 }
 
 // create a list provider
-pub fn list(lp: config::ListProvider, name: &str) -> Provider {
+pub fn list(lp: configv2::providers::ListProvider, name: &str) -> Provider {
     debug!("providers::list={:?}", lp);
     // create the channel for the provider
-    let unique = lp.unique();
+    let unique = lp.unique;
     let rs = stream::iter(lp.into_iter().map(Ok));
     let limit = channel::Limit::dynamic(5);
     let (tx, rx) = channel::channel(limit, unique, name);
@@ -341,6 +341,12 @@ mod tests {
     */
 
     #[test]
+    fn fix_the_list_provider_test() {
+        panic!("FIX THE LIST PROVIDER TEST")
+    }
+
+    /*
+    #[test]
     fn literals_provider_works() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
@@ -447,6 +453,7 @@ mod tests {
             assert_eq!(values, expect, "sixth");
         });
     }
+    */
 
     #[test]
     fn response_provider_works() {
