@@ -5,20 +5,16 @@ use super::{
     PropagateVars,
 };
 use serde::Deserialize;
-// Queries/expressions are handled as regular String values for now.
-
-// TODO: handle the queries better.
 
 #[derive(Debug, Deserialize)]
 pub struct Logger<VD: Bool = True> {
     query: Option<super::query::Query>,
     pub to: LogTo<VD>,
     #[serde(default)]
-    pretty: bool,
+    pub pretty: bool,
+    pub limit: Option<u64>,
     #[serde(default)]
-    limit: u64,
-    #[serde(default)]
-    kill: bool,
+    pub kill: bool,
 }
 
 impl PropagateVars for Logger<False> {
@@ -141,7 +137,7 @@ mod tests {
         let logger = from_yaml::<Logger<False>>("to:\n  type: stdout").unwrap();
         assert_eq!(logger.query, None);
         assert_eq!(logger.pretty, false);
-        assert_eq!(logger.limit, 0);
+        assert_eq!(logger.limit, None);
         assert_eq!(logger.kill, false);
 
         assert_eq!(logger.to, LogTo::Stdout);

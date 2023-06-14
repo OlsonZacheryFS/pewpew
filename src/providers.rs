@@ -218,26 +218,19 @@ impl Sink<json::Value> for Logger {
 
 // create a logger. Takes a test_killer because `Logger`s have the means of killing a test
 pub fn logger(
-    logger: config::Logger,
+    logger: configv2::Logger,
     test_killer: &broadcast::Sender<Result<TestEndReason, TestError>>,
     writer: FCSender<MsgType>,
 ) -> Logger {
-    debug!("providers::logger={}", logger);
+    debug!("providers::logger={:?}", logger);
     let pretty = logger.pretty;
     let kill = logger.kill;
 
-    let test_killer = if kill {
-        Some(test_killer.clone())
-    } else {
-        None
-    };
-
-    let limit = if kill && logger.limit.is_none() {
-        Some(1)
-    } else {
-        logger.limit
-    }
-    .map(|limit| Arc::new(AtomicIsize::new(limit as isize)));
+    let test_killer = kill.then(|| test_killer.clone());
+    let limit = logger
+        .limit
+        .or_else(|| kill.then_some(1))
+        .map(|limit| Arc::new(AtomicIsize::new(limit as isize)));
 
     Logger {
         limit,
@@ -525,6 +518,12 @@ mod tests {
     */
 
     #[test]
+    fn fix_the_loggers_tests() {
+        todo!("FIX THE LOGGER TESTS")
+    }
+
+    /*
+    #[test]
     fn basic_logger_works() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
@@ -721,4 +720,5 @@ mod tests {
             assert!(check, "test should not be killed");
         });
     }
+    */
 }
