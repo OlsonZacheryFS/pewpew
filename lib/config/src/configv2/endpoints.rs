@@ -12,6 +12,7 @@ use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryFrom,
+    num::NonZeroUsize,
     str::FromStr,
 };
 use thiserror::Error;
@@ -29,7 +30,7 @@ pub struct Endpoint<VD: Bool = True> {
     method: Method,
     pub peak_load: Option<Template<HitsPerMinute, VarsOnly, VD>>,
     #[serde(default = "BTreeMap::new")]
-    pub tags: BTreeMap<String, Template<String, Regular, VD>>,
+    pub tags: BTreeMap<String, Template<String, VarsOnly, VD>>,
     url: Template<String, Regular, VD>,
     #[serde(default)]
     pub provides: BTreeMap<String, EndpointProvides>,
@@ -39,7 +40,7 @@ pub struct Endpoint<VD: Bool = True> {
     pub on_demand: bool,
     #[serde(default)]
     logs: BTreeMap<String, EndpointLogs>,
-    max_parallel_requests: Option<u64>,
+    max_parallel_requests: Option<NonZeroUsize>,
     #[serde(default)]
     no_auto_returns: bool,
     request_timeout: Option<Duration>,
@@ -85,7 +86,7 @@ impl TryFrom<&str> for Method {
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[serde(tag = "type", content = "content")]
-enum EndPointBody<VD: Bool> {
+pub enum EndPointBody<VD: Bool = True> {
     #[serde(rename = "str")]
     String(Template<String, Regular, VD>),
     File(Template<String, Regular, VD>),
@@ -106,7 +107,7 @@ impl PropagateVars for EndPointBody<False> {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
-struct MultiPartBodySection<VD: Bool> {
+pub struct MultiPartBodySection<VD: Bool> {
     #[serde(default = "Vec::new")]
     headers: Headers<VD>,
     body: EndPointBody<VD>,

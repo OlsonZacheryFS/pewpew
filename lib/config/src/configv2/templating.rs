@@ -67,7 +67,7 @@ where
     pub fn into_stream<P, Ar, E>(
         self,
         p: &BTreeMap<String, P>,
-    ) -> impl Stream<Item = Result<(Arc<serde_json::Value>, Vec<Ar>), E>>
+    ) -> impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>
     where
         P: super::scripting::ProviderStream<Ar, Err = E> + 'static,
         Ar: Clone + Send + Unpin + 'static,
@@ -75,7 +75,7 @@ where
     {
         match self {
             Self::Literal { value } => Either::A(futures::stream::repeat(Ok((
-                Arc::new(serde_json::Value::String(value)),
+                serde_json::Value::String(value),
                 vec![], // TODO: what is the Vec<Ar> for?
             )))),
             Self::NeedsProviders { script, .. } => Either::B(
@@ -85,8 +85,7 @@ where
                 })
                 .unwrap()
                 .into_stream(p)
-                .unwrap()
-                .map_ok(|(v, ar)| (Arc::new(v), ar)),
+                .unwrap(),
             ),
             _ => unreachable!(),
         }

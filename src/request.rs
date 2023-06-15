@@ -44,7 +44,8 @@ use config::{
         common::ProviderSend,
         query::Query,
         scripting::{ProviderStream, ProviderStreamStream},
-        templating::{Regular, Template, True},
+        templating::{Regular, Template, True, VarsOnly},
+        EndPointBody,
     },
     BodyTemplate, EndpointProvidesSendOptions,
     MultipartBody,
@@ -331,11 +332,7 @@ impl EndpointBuilder {
         } else if let Some(set) = provides_set {
             let stream = stream::poll_fn(move |_| {
                 let done = set.iter().all(channel::Sender::no_receivers);
-                if done {
-                    Poll::Ready(None)
-                } else {
-                    Poll::Ready(Some(Ok(StreamItem::None)))
-                }
+                Poll::Ready((!done).then(|| Ok(StreamItem::None)))
             });
             streams.push((true, Box::new(stream)));
         }
@@ -361,14 +358,14 @@ impl EndpointBuilder {
                                               // go through the list of required providers and make sure we have them all
 
         // TODO: try actually using the providers the endpoint needs.
-        for name in ctx.providers.iter()
+        for name in ctx.providers.keys()
         /*.unique_providers()*/
         {
-            let provider = match ctx.providers.get(&name) {
+            let provider = match ctx.providers.get(name) {
                 Some(p) => p,
                 None => continue,
             };
-            debug!("EndpointBuilder.build unique_providers name=\"{}\"", name);
+            //debug!("EndpointBuilder.build unique_providers name=\"{}\"", name);
             let receiver = provider.rx.clone();
             let ar = provider
                 .auto_return
@@ -664,7 +661,7 @@ type OnDemandStreams = Vec<Box<dyn Stream<Item = ()> + Send + Unpin + 'static>>;
 pub type StatsTx = futures_channel::UnboundedSender<stats::StatsMessage>;
 
 pub struct Endpoint {
-    body: BodyTemplate,
+    body: Option<EndPointBody>,
     client: Arc<Client<HttpsConnector<HttpConnector<hyper::client::connect::dns::GaiResolver>>>>,
     headers: Vec<(String, Template<String, Regular, True>)>,
     max_parallel_requests: Option<NonZeroUsize>,
@@ -675,7 +672,7 @@ pub struct Endpoint {
     precheck_rr_providers: u16,
     provides: Vec<Outgoing>,
     rr_providers: u16,
-    tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
+    tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
     stats_tx: StatsTx,
     stream_collection: StreamCollection,
     timeout: Duration,

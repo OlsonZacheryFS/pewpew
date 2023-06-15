@@ -1,6 +1,9 @@
 use super::*;
 
-use config::{RESPONSE_BODY, RESPONSE_HEADERS, RESPONSE_HEADERS_ALL, RESPONSE_STARTLINE, STATS};
+use config::{
+    configv2::templating::VarsOnly, RESPONSE_BODY, RESPONSE_HEADERS, RESPONSE_HEADERS_ALL,
+    RESPONSE_STARTLINE, STATS,
+};
 use futures::TryStreamExt;
 
 pub(super) struct ResponseHandler {
@@ -11,7 +14,7 @@ pub(super) struct ResponseHandler {
     pub(super) outgoing: Arc<Vec<Outgoing>>,
     pub(super) now: Instant,
     pub(super) stats_tx: StatsTx,
-    pub(super) tags: Arc<BTreeMap<String, Template>>,
+    pub(super) tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
 }
 
 impl ResponseHandler {
