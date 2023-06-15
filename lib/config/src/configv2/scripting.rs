@@ -8,7 +8,10 @@ use boa_engine::{
 };
 use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
-use std::{cell::OnceCell, collections::BTreeMap};
+use std::{
+    cell::{OnceCell, RefCell},
+    collections::BTreeMap,
+};
 use thiserror::Error;
 use zip_all::zip_all_map;
 
@@ -22,8 +25,7 @@ pub trait ProviderStream<Ar: Clone + Send + Unpin + 'static> {
 }
 
 pub struct EvalExpr {
-    ctx: Context,
-    efn: JsFunction,
+    ctx: sync::SendContext,
     needed: Vec<String>,
 }
 
@@ -63,18 +65,16 @@ impl EvalExpr {
                 "this script doesn't read from any providers; consider a literal or vars template"
             );
         }
-        let mut ctx = builtins::get_default_context();
-        ctx.eval(script).map_err(CreateExprError::BuildFnFailure)?;
-        let efn: JsFunction =
-            JsFunction::from_object(ctx.eval("____eval").unwrap().as_object().unwrap().clone())
-                .unwrap();
-        Ok(Self { ctx, efn, needed })
+        Ok(Self {
+            ctx: sync::SendContext::new(script),
+            needed,
+        })
     }
 
     pub fn into_stream<P, Ar, E>(
         mut self,
         providers: &BTreeMap<String, P>,
-    ) -> Result<impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>, IntoStreamError>
+    ) -> Result<impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send, IntoStreamError>
     where
         P: ProviderStream<Ar, Err = E> + Sized + 'static,
         Ar: Clone + Send + Unpin + 'static,
@@ -90,7 +90,8 @@ impl EvalExpr {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         Ok(zip_all_map(providers, true).map_ok(move |values| {
-            let ctx = &mut self.ctx;
+            let mut ctx = self.ctx.ctx_mut();
+            let ctx = &mut *ctx;
 
             let values: BTreeMap<_, _> = values
                 .into_iter()
@@ -107,7 +108,8 @@ impl EvalExpr {
             }
             let object = object.build();
             (
-                self.efn
+                self.ctx
+                    .efn()
                     .call(&JsValue::Null, &[object.into()], ctx)
                     .unwrap()
                     .to_json(ctx)
@@ -116,6 +118,49 @@ impl EvalExpr {
             )
         }))
     }
+}
+
+mod sync {
+    //! # Safety
+    //! The boa engine docs state that Contexts created in the same thread can share objects, which
+    //! is presumably the primary reason that `Send` is not implemented. Here, a separate thread is
+    //! created to do nothing but create the needed non-Send types, which should mean that any
+    //! non-Send internals are exclusive to this instance, meaning that Sending is Ok.
+    //!
+    //! As long as Clone is not implemented for `SendContext`, and there aren't any hidden details
+    //! that complicate things, safety should be upheld for the impl of Send for this type
+
+    use super::*;
+    use std::cell::RefMut;
+
+    pub struct SendContext(RefCell<Context>, JsFunction);
+
+    impl SendContext {
+        pub fn new(src: String) -> Self {
+            std::thread::spawn(move || Self::new_inner(src))
+                .join()
+                .unwrap()
+        }
+
+        fn new_inner(src: String) -> Self {
+            let mut ctx = builtins::get_default_context();
+            ctx.eval(src).expect("TODO");
+            let efn =
+                JsFunction::from_object(ctx.eval("____eval").unwrap().as_object().unwrap().clone())
+                    .unwrap();
+            Self(RefCell::new(ctx), efn)
+        }
+
+        pub fn ctx_mut(&self) -> RefMut<Context> {
+            self.0.borrow_mut()
+        }
+
+        pub fn efn(&self) -> &JsFunction {
+            &self.1
+        }
+    }
+
+    unsafe impl Send for SendContext {}
 }
 
 #[derive(Debug, Error)]
