@@ -356,10 +356,14 @@ impl EndpointBuilder {
         }
         // Required providers
         // these u16s are bitwise maps of what standard select request/response/stats are selected
-        let rr_providers = providers_to_stream.get_special();
-        let precheck_rr_providers = providers_to_stream.get_where_special();
-        // go through the list of required providers and make sure we have them all
-        for name in providers_to_stream.unique_providers() {
+        let rr_providers = u16::MAX; // providers_to_stream.get_special();
+        let precheck_rr_providers = u16::MAX; // providers_to_stream.get_where_special();
+                                              // go through the list of required providers and make sure we have them all
+
+        // TODO: try actually using the providers the endpoint needs.
+        for name in ctx.providers.iter()
+        /*.unique_providers()*/
+        {
             let provider = match ctx.providers.get(&name) {
                 Some(p) => p,
                 None => continue,
