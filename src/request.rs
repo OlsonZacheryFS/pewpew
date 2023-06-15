@@ -27,6 +27,7 @@ use hyper_tls::HttpsConnector;
 use rand::distributions::{Alphanumeric, Distribution};
 use select_any::select_any;
 use serde_json as json;
+use thiserror::Error;
 use tokio::{
     fs::File as TokioFile,
     io::{AsyncRead, ReadBuf},
@@ -38,8 +39,17 @@ use crate::providers;
 use crate::stats;
 use crate::util::tweak_path;
 use config::{
-    configv2, BodyTemplate, EndpointProvidesSendOptions, MultipartBody, ProviderStream, Select,
-    Template,
+    configv2::{
+        self,
+        common::ProviderSend,
+        query::Query,
+        scripting::{ProviderStream, ProviderStreamStream},
+        templating::{Regular, Template, True},
+    },
+    BodyTemplate, EndpointProvidesSendOptions,
+    MultipartBody,
+    /*ProviderStream, Select,
+    Template,*/
 };
 
 use std::{
@@ -165,28 +175,34 @@ impl ProviderOrLogger {
 }
 
 struct Outgoing {
-    select: Arc<Select>,
+    qps: Arc<(Query, ProviderSend)>,
     tx: ProviderOrLogger,
 }
 
 impl Outgoing {
-    fn new(select: Select, tx: ProviderOrLogger) -> Self {
+    fn new(qps: (Query, ProviderSend), tx: ProviderOrLogger) -> Self {
         Self {
-            select: select.into(),
+            qps: qps.into(),
             tx,
         }
     }
 }
-
+/*
 type ProviderStreamStream<Ar> = Box<
     dyn Stream<Item = Result<(json::Value, Vec<Ar>), config::ExecutingExpressionError>>
         + Send
         + Unpin
         + 'static,
 >;
+        */
+
+#[derive(Debug, Clone, Copy, Error)]
+#[error("Temp")]
+struct TempError;
 
 impl ProviderStream<AutoReturn> for providers::Provider {
-    fn into_stream(&self) -> ProviderStreamStream<AutoReturn> {
+    type Err = TempError;
+    fn as_stream(&self) -> ProviderStreamStream<AutoReturn, Self::Err> {
         let auto_return = self.auto_return.map(|ar| (ar, self.tx.clone()));
         let future = self.rx.clone().map(move |v| {
             let mut outgoing = Vec::new();
@@ -214,7 +230,7 @@ pub struct BuilderContext {
 }
 
 pub struct EndpointBuilder {
-    endpoint: config::Endpoint,
+    endpoint: configv2::Endpoint,
     start_stream: Option<Pin<Box<dyn Stream<Item = (Instant, Option<Instant>)> + Send>>>,
 }
 
@@ -224,7 +240,7 @@ fn convert_to_debug<T>(value: &[(String, T)]) -> Vec<String> {
 
 impl EndpointBuilder {
     pub fn new(
-        endpoint: config::Endpoint,
+        endpoint: configv2::Endpoint,
         start_stream: Option<Pin<Box<dyn Stream<Item = (Instant, Option<Instant>)> + Send>>>,
     ) -> Self {
         Self {
@@ -237,6 +253,7 @@ impl EndpointBuilder {
         let mut outgoing = Vec::new();
         let mut on_demand_streams: OnDemandStreams = Vec::new();
 
+        /*
         let config::Endpoint {
             method,
             headers,
@@ -252,12 +269,29 @@ impl EndpointBuilder {
             request_timeout,
             ..
         } = self.endpoint;
+        */
+        let configv2::Endpoint {
+            method,
+            headers,
+            body,
+            no_auto_returns,
+            provides,
+            logs,
+            on_demand,
+            tags,
+            request_timeout,
+            url,
+            max_parallel_requests,
+            ..
+        } = self.endpoint;
+        /*
         debug!("EndpointBuilder.build method=\"{}\" url=\"{}\" body=\"{}\" headers=\"{:?}\" no_auto_returns=\"{}\" \
             max_parallel_requests=\"{:?}\" provides=\"{:?}\" logs=\"{:?}\" on_demand=\"{}\" request_timeout=\"{:?}\"",
             method.as_str(), url.evaluate_with_star(), body, convert_to_debug(&headers), no_auto_returns,
             max_parallel_requests, convert_to_debug(&provides), convert_to_debug(&logs), on_demand, request_timeout);
+        */
 
-        let timeout = request_timeout.unwrap_or(*ctx.config.client.request_timeout);
+        let timeout = request_timeout.unwrap_or(ctx.config.client.request_timeout);
 
         let mut provides_set = if self.start_stream.is_none() && !provides.is_empty() {
             Some(BTreeSet::new())
@@ -268,8 +302,10 @@ impl EndpointBuilder {
         let provides = provides
             .into_iter()
             .map(|(k, v)| {
+                /*
                 debug!("EndpointBuilder.build provide method=\"{}\" url=\"{}\" provide=\"{:?}\" provides=\"{:?}\"",
                     method.as_str(), url.evaluate_with_star(), k, v);
+                */
                 let provider = ctx
                     .providers
                     .get(&k)
@@ -282,7 +318,7 @@ impl EndpointBuilder {
                     let stream = provider.on_demand.clone();
                     on_demand_streams.push(Box::new(stream));
                 }
-                Outgoing::new(v, ProviderOrLogger::Provider(tx))
+                Outgoing::new(v.into(), ProviderOrLogger::Provider(tx))
             })
             .collect();
 
@@ -313,7 +349,10 @@ impl EndpointBuilder {
                 .loggers
                 .get(&k)
                 .expect("logs should reference a valid logger");
-            outgoing.push(Outgoing::new(v, ProviderOrLogger::Logger(tx.clone())));
+            outgoing.push(Outgoing::new(
+                v.into(),
+                ProviderOrLogger::Logger(tx.clone()),
+            ));
         }
         // Required providers
         // these u16s are bitwise maps of what standard select request/response/stats are selected
@@ -353,11 +392,11 @@ impl EndpointBuilder {
                 name, vce
             );
             let stream = vce
-                .into_stream(&ctx.providers, false)
+                .into_stream(&ctx.providers /*, false*/)
                 .map_ok(move |(v, returns)| {
                     StreamItem::Declare(name.clone(), v, returns, Instant::now())
                 })
-                .map_err(Into::into);
+                .map_err(|_| todo!() /*Into::into*/);
             streams.push((false, Box::new(stream)));
         }
         let stats_tx = ctx.stats_tx.clone();
@@ -367,7 +406,7 @@ impl EndpointBuilder {
             client,
             headers,
             max_parallel_requests,
-            method,
+            method: *method,
             no_auto_returns,
             on_demand_streams,
             outgoing, // loggers
@@ -378,7 +417,7 @@ impl EndpointBuilder {
             stats_tx,
             stream_collection: streams,
             url,
-            timeout,
+            timeout: *timeout,
         }
     }
 }
@@ -623,7 +662,7 @@ pub type StatsTx = futures_channel::UnboundedSender<stats::StatsMessage>;
 pub struct Endpoint {
     body: BodyTemplate,
     client: Arc<Client<HttpsConnector<HttpConnector<hyper::client::connect::dns::GaiResolver>>>>,
-    headers: Vec<(String, Template)>,
+    headers: Vec<(String, Template<String, Regular, True>)>,
     max_parallel_requests: Option<NonZeroUsize>,
     method: Method,
     no_auto_returns: bool,
@@ -632,11 +671,11 @@ pub struct Endpoint {
     precheck_rr_providers: u16,
     provides: Vec<Outgoing>,
     rr_providers: u16,
-    tags: Arc<BTreeMap<String, Template>>,
+    tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
     stats_tx: StatsTx,
     stream_collection: StreamCollection,
     timeout: Duration,
-    url: Template,
+    url: Template<String, Regular, True>,
 }
 
 impl Endpoint {

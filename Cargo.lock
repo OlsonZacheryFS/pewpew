@@ -1540,6 +1540,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "test_common",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "url",

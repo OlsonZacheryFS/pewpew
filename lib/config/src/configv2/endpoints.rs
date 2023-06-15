@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use super::{
-    common::{Duration, Headers},
+    common::{Duration, Headers, ProviderSend},
     load_pattern::LoadPattern,
     query::Query,
     templating::{Bool, False, Regular, Template, True, VarsOnly},
@@ -18,9 +18,9 @@ use thiserror::Error;
 
 #[derive(Debug, Deserialize)]
 pub struct Endpoint<VD: Bool = True> {
-    #[serde(default)]
-    declare: BTreeMap<String, String>, // expressions are still Strings for now
     #[serde(default = "BTreeMap::new")]
+    pub declare: BTreeMap<String, Template<String, Regular, VD>>,
+    #[serde(default = "Vec::new")]
     headers: Headers<VD>,
     body: Option<EndPointBody<VD>>,
     #[serde(bound = "LoadPattern<VD>: serde::de::DeserializeOwned")]
@@ -50,7 +50,7 @@ impl PropagateVars for Endpoint<False> {
 
     fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
         Ok(Endpoint {
-            declare: self.declare,
+            declare: self.declare.insert_vars(vars)?,
             headers: self.headers.insert_vars(vars)?,
             body: self.body.insert_vars(vars)?,
             load_pattern: self.load_pattern.insert_vars(vars)?,
@@ -71,7 +71,7 @@ impl PropagateVars for Endpoint<False> {
 /// Newtype wrapper around [`http::Method`] for implementing [`serde::Deserialize`].
 #[derive(Deserialize, Debug, Default, Deref, FromStr, PartialEq, Eq)]
 #[serde(try_from = "&str")]
-struct Method(http::Method);
+pub struct Method(http::Method);
 
 impl TryFrom<&str> for Method {
     type Error = <Self as FromStr>::Err;
@@ -107,7 +107,7 @@ impl PropagateVars for EndPointBody<False> {
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct MultiPartBodySection<VD: Bool> {
-    #[serde(default = "BTreeMap::new")]
+    #[serde(default = "Vec::new")]
     headers: Headers<VD>,
     body: EndPointBody<VD>,
 }
@@ -167,13 +167,25 @@ impl TryFrom<&str> for HitsPerMinute {
 #[derive(Debug, Deserialize)]
 pub struct EndpointProvides {
     query: Query,
-    send: super::common::ProviderSend,
+    send: ProviderSend,
+}
+
+impl From<EndpointProvides> for (Query, ProviderSend) {
+    fn from(EndpointProvides { query, send }: EndpointProvides) -> Self {
+        (query, send)
+    }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(transparent)]
 struct EndpointLogs {
     query: Query,
+}
+
+impl From<EndpointLogs> for (Query, ProviderSend) {
+    fn from(value: EndpointLogs) -> Self {
+        (value.query, ProviderSend::Block)
+    }
 }
 
 #[cfg(test)]

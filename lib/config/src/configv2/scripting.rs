@@ -12,7 +12,7 @@ use std::{cell::OnceCell, collections::BTreeMap};
 use thiserror::Error;
 use zip_all::zip_all_map;
 
-type ProviderStreamStream<Ar, E> =
+pub type ProviderStreamStream<Ar, E> =
     Box<dyn Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + Unpin + 'static>;
 
 pub trait ProviderStream<Ar: Clone + Send + Unpin + 'static> {

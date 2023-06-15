@@ -259,3 +259,14 @@ where
         self.map(|t| t.insert_vars(vars)).transpose()
     }
 }
+
+impl<T, U> PropagateVars for (T, U)
+where
+    U: PropagateVars,
+{
+    type Residual = (T, U::Residual);
+
+    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Residual, VarsError> {
+        Ok((self.0, self.1.insert_vars(vars)?))
+    }
+}
