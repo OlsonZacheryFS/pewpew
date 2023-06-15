@@ -729,7 +729,7 @@ pub fn create_try_run_stats_channel(
 // create the stats channel for a full test
 pub fn create_stats_channel(
     test_killer: broadcast::Sender<Result<TestEndReason, TestError>>,
-    config: &config::GeneralConfig,
+    config: &config::configv2::General,
     providers: &BTreeMap<String, providers::Provider>,
     mut console: FCSender<MsgType>,
     run_config: &RunConfig,
@@ -779,7 +779,7 @@ pub fn create_stats_channel(
     // create the task responsible for receiving incoming statistics
     let stats_receiver_task = async move {
         let mut print_stats_interval =
-            IntervalStream::new(time::interval_at(now + next_bucket, bucket_size));
+            IntervalStream::new(time::interval_at(now + next_bucket, *bucket_size));
         // create a stream which combines getting incoming messages, printing stats on an interval
         // and checking if the test has ended
         enum StreamItem {

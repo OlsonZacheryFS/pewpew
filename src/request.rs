@@ -38,7 +38,8 @@ use crate::providers;
 use crate::stats;
 use crate::util::tweak_path;
 use config::{
-    BodyTemplate, EndpointProvidesSendOptions, MultipartBody, ProviderStream, Select, Template,
+    configv2, BodyTemplate, EndpointProvidesSendOptions, MultipartBody, ProviderStream, Select,
+    Template,
 };
 
 use std::{
@@ -199,7 +200,7 @@ impl ProviderStream<AutoReturn> for providers::Provider {
 }
 
 pub struct BuilderContext {
-    pub config: config::Config,
+    pub config: configv2::Config,
     pub config_path: PathBuf,
     // the http client
     pub client:
@@ -256,7 +257,7 @@ impl EndpointBuilder {
             method.as_str(), url.evaluate_with_star(), body, convert_to_debug(&headers), no_auto_returns,
             max_parallel_requests, convert_to_debug(&provides), convert_to_debug(&logs), on_demand, request_timeout);
 
-        let timeout = request_timeout.unwrap_or(ctx.config.client.request_timeout);
+        let timeout = request_timeout.unwrap_or(*ctx.config.client.request_timeout);
 
         let mut provides_set = if self.start_stream.is_none() && !provides.is_empty() {
             Some(BTreeSet::new())

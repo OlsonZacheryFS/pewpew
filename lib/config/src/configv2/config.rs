@@ -9,7 +9,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
-pub struct Config<VD: Bool> {
+pub struct Config<VD: Bool = True> {
     pub client: Client<VD>,
     pub general: General,
 }
@@ -29,7 +29,7 @@ impl PropagateVars for Config<False> {
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct Client<VD: Bool> {
     #[serde(default = "default_timeout")]
-    request_timeout: Duration,
+    pub request_timeout: Duration,
     #[serde(default = "BTreeMap::new")]
     headers: Headers<VD>,
     #[serde(default = "default_keepalive")]
@@ -58,9 +58,9 @@ pub struct General {
     #[serde(default = "default_buffer_start_size")]
     pub auto_buffer_start_size: u64,
     #[serde(default = "default_bucket_size")]
-    bucket_size: Duration,
+    pub bucket_size: Duration,
     #[serde(default = "default_log_provider_stats")]
-    log_provider_stats: bool,
+    pub log_provider_stats: bool,
     watch_transition_time: Option<Duration>,
 }
 
