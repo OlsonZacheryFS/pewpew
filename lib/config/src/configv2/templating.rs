@@ -91,6 +91,13 @@ where
             _ => unreachable!(),
         }
     }
+
+    pub fn as_static(&self) -> Option<&str> {
+        match self {
+            Self::Literal { value } => Some(value),
+            _ => None,
+        }
+    }
 }
 
 impl<VD: Bool> Template<String, EnvsOnly, VD, False> {

@@ -958,13 +958,8 @@ fn create_try_run_future(
         let static_tags = endpoint
             .tags
             .iter()
-            .filter_map(|(k, v)| {
-                v.is_simple().then(|| {
-                    v.evaluate(Cow::Owned(json::Value::Null), None)
-                        .map(|v| (k.clone(), v))
-                })
-            })
-            .collect::<Result<_, _>>()?;
+            .filter_map(|(k, v)| v.as_static().map(|s| (k.clone(), s.to_owned())))
+            .collect();
 
         let builder = request::EndpointBuilder::new(endpoint, None);
         endpoints.append(static_tags, builder, provides_set, required_providers);
