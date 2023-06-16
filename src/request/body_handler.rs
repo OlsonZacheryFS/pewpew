@@ -1,7 +1,10 @@
 use crate::error::RecoverableError;
 use crate::stats;
 
-use config::{EndpointProvidesSendOptions, Template};
+use config::{
+    configv2::templating::{Template, True, VarsOnly},
+    EndpointProvidesSendOptions,
+};
 use ether::EitherExt;
 use futures::{
     future::{select_all, try_join_all},
@@ -27,7 +30,7 @@ pub(super) struct BodyHandler {
     pub(super) provider_delays: ProviderDelays,
     pub(super) stats_tx: StatsTx,
     pub(super) status: u16,
-    pub(super) tags: Arc<BTreeMap<String, Template>>,
+    pub(super) tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
     pub(super) template_values: TemplateValues,
 }
 
@@ -67,9 +70,10 @@ impl BodyHandler {
             .tags
             .iter()
             .filter_map(|(k, t)| {
-                t.evaluate(Cow::Borrowed(&*template_values), None)
-                    .ok()
-                    .map(|v| (k.clone(), v))
+                /*t.evaluate(Cow::Borrowed(&*template_values), None)
+                .ok()
+                .map(|v| (k.clone(), v))*/
+                Some((k.clone(), t.get().clone()))
             })
             .collect();
         let tags = Arc::new(tags);
@@ -222,6 +226,11 @@ mod tests {
 
     use config::{EndpointProvidesSendOptions::*, Select};
 
+    #[test]
+    fn fix_body_handler_tests() {
+        todo!("FIX BODY HANDLER TESTS")
+    }
+    /*
     fn create_outgoing(select: Select) -> (Outgoing, Receiver<json::Value>) {
         let (tx, rx) = channel::channel(Limit::Static(1), false, &"create_outgoing".to_string());
         (Outgoing::new(select, ProviderOrLogger::Provider(tx)), rx)
@@ -433,4 +442,5 @@ mod tests {
         };
         assert!(b, "receiver 3 is closed, {:?}", r);
     }
+    */
 }
