@@ -42,6 +42,7 @@ use config::{
     configv2::{
         self,
         common::ProviderSend,
+        endpoints::MultiPartBodySection,
         query::Query,
         scripting::{ProviderStream, ProviderStreamStream},
         templating::{Regular, Template, True, VarsOnly},
@@ -57,6 +58,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     future::Future,
+    iter,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     path::PathBuf,
@@ -431,7 +433,7 @@ pub enum StreamItem {
 }
 
 fn multipart_body_as_hyper_body(
-    multipart_body: &MultipartBody,
+    multipart_body: &Vec<(String, MultiPartBodySection)>,
     template_values: &TemplateValues,
     content_type_entry: HeaderEntry<'_, HeaderValue>,
     copy_body_value: bool,
@@ -472,31 +474,32 @@ fn multipart_body_as_hyper_body(
     let mut body_value2 = Vec::new();
 
     let pieces = multipart_body
-        .pieces
         .iter()
-        .enumerate()
-        .map(|(i, mp)| {
-            let mut body = mp
-                .template
-                .evaluate(Cow::Borrowed(template_values.as_json()), None)
-                .map_err(TestError::from)?;
+        .zip(iter::once(&b"--"[..]).chain(iter::repeat(&b"\r\n--"[..])))
+        .map(|((name, mp), lead_piece)| {
+            let (template, path) = match &mp.body {
+                EndPointBody::File(p, t) => (t, Some(p)),
+                EndPointBody::String(t) => (t, None),
+                EndPointBody::Multipart(_) => todo!("make unreachable"),
+            };
+            let mut body = template
+                .evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/)
+                .expect("TODO");
+            //.map_err(TestError::from)?;
 
             let mut has_content_disposition = false;
 
-            let mut piece_data = Vec::new();
-            if i == 0 {
-                piece_data.extend_from_slice(b"--");
-            } else {
-                piece_data.extend_from_slice(b"\r\n--");
-            }
+            let mut piece_data = Vec::with_capacity(40 + mp.headers.len() * 4);
+            piece_data.extend_from_slice(lead_piece);
             piece_data.extend_from_slice(boundary.as_bytes());
 
             for (k, t) in mp.headers.iter() {
                 let key = HeaderName::from_bytes(k.as_bytes())
                     .map_err::<TestError, _>(|e| RecoverableError::BodyErr(Arc::new(e)).into())?;
                 let value = t
-                    .evaluate(Cow::Borrowed(template_values.as_json()), None)
-                    .map_err::<TestError, _>(Into::into)?;
+                    .evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/)
+                    .expect("TODO");
+                //.map_err::<TestError, _>(Into::into)?;
                 let value = HeaderValue::from_str(&value)
                     .map_err::<TestError, _>(|e| RecoverableError::BodyErr(Arc::new(e)).into())?;
 
@@ -510,16 +513,15 @@ fn multipart_body_as_hyper_body(
             }
 
             if is_form && !has_content_disposition {
-                let value = if mp.is_file {
+                let value = if path.is_some() {
                     HeaderValue::from_str(&format!(
                         "form-data; name=\"{}\"; filename=\"{}\"",
-                        mp.name, body
+                        name, body
                     ))
                 } else {
-                    HeaderValue::from_str(&format!("form-data; name=\"{}\"", mp.name))
-                };
-                let value = value
-                    .map_err::<TestError, _>(|e| RecoverableError::BodyErr(Arc::new(e)).into())?;
+                    HeaderValue::from_str(&format!("form-data; name=\"{}\"", name))
+                }
+                .map_err::<TestError, _>(|e| RecoverableError::BodyErr(Arc::new(e)).into())?;
 
                 piece_data.extend_from_slice(b"\r\ncontent-disposition: ");
                 piece_data.extend_from_slice(value.as_bytes());
@@ -527,32 +529,35 @@ fn multipart_body_as_hyper_body(
 
             piece_data.extend_from_slice(b"\r\n\r\n");
 
-            let ret = if mp.is_file {
-                if copy_body_value {
-                    body_value2.extend_from_slice(&piece_data);
-                    body_value2.extend_from_slice(b"<<contents of file: ");
-                    body_value2.extend_from_slice(body.as_bytes());
-                    body_value2.extend_from_slice(b">>");
+            Ok::<_, TestError>(match path {
+                // not a map_or_else() as both paths need to mutably borrow the same data
+                Some(path) => {
+                    if copy_body_value {
+                        body_value2.extend_from_slice(&piece_data);
+                        body_value2.extend_from_slice(b"<<contents of file: ");
+                        body_value2.extend_from_slice(body.as_bytes());
+                        body_value2.extend_from_slice(b">>");
+                    }
+                    let piece_data_bytes = piece_data.len() as u64;
+                    let piece_stream = future::ok(Bytes::from(piece_data)).into_stream();
+                    tweak_path(&mut body, &path);
+                    let a = create_file_hyper_body(body).map_ok(move |(bytes, body)| {
+                        let stream = piece_stream.chain(body).a();
+                        (bytes + piece_data_bytes, stream)
+                    });
+                    Either::A(a)
                 }
-                let piece_data_bytes = piece_data.len() as u64;
-                let piece_stream = future::ok(Bytes::from(piece_data)).into_stream();
-                tweak_path(&mut body, &multipart_body.path);
-                let a = create_file_hyper_body(body).map_ok(move |(bytes, body)| {
-                    let stream = piece_stream.chain(body).a();
-                    (bytes + piece_data_bytes, stream)
-                });
-                Either::A(a)
-            } else {
-                piece_data.extend_from_slice(body.as_bytes());
-                if copy_body_value {
-                    body_value2.extend_from_slice(&piece_data);
+                None => {
+                    piece_data.extend_from_slice(body.as_bytes());
+                    if copy_body_value {
+                        body_value2.extend_from_slice(&piece_data);
+                    }
+                    let piece_data_bytes = piece_data.len() as u64;
+                    let piece_stream = future::ok(Bytes::from(piece_data)).into_stream().b();
+                    let b = future::ok((piece_data_bytes, piece_stream));
+                    Either::B(b)
                 }
-                let piece_data_bytes = piece_data.len() as u64;
-                let piece_stream = future::ok(Bytes::from(piece_data)).into_stream().b();
-                let b = future::ok((piece_data_bytes, piece_stream));
-                Either::B(b)
-            };
-            Ok::<_, TestError>(ret)
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
 
