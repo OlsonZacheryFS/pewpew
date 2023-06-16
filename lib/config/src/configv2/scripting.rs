@@ -90,7 +90,10 @@ impl EvalExpr {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         Ok(zip_all_map(providers, true).map_ok(move |values| {
-            let mut ctx = self.ctx.ctx_mut();
+            // Safety
+            // Since the SendContext is wholly owned by this closure, and nothing is moved out,
+            // then there should be no issues.
+            let mut ctx = unsafe { self.ctx.ctx_mut() };
             let ctx = &mut *ctx;
 
             let values: BTreeMap<_, _> = values
@@ -108,8 +111,7 @@ impl EvalExpr {
             }
             let object = object.build();
             (
-                self.ctx
-                    .efn()
+                unsafe { self.ctx.efn() }
                     .call(&JsValue::Null, &[object.into()], ctx)
                     .unwrap()
                     .to_json(ctx)
@@ -151,11 +153,15 @@ mod sync {
             Self(RefCell::new(ctx), efn)
         }
 
-        pub fn ctx_mut(&self) -> RefMut<Context> {
+        /// # Safety
+        /// Don't Clone the Context, or Send this struct while the Ref is active.
+        pub unsafe fn ctx_mut(&self) -> RefMut<Context> {
             self.0.borrow_mut()
         }
 
-        pub fn efn(&self) -> &JsFunction {
+        /// # Safety
+        /// Don't Clone the JsFunction
+        pub unsafe fn efn(&self) -> &JsFunction {
             &self.1
         }
     }
