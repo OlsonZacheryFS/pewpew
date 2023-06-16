@@ -133,7 +133,7 @@ impl LoadTest<True, True> {
         todo!()
     }
 
-    pub fn add_logger(&mut self, _: String, _: super::LoggerPreProcessed) -> Result<(), ()> {
+    pub fn add_logger(&mut self, _: String, _: Logger) -> Result<(), ()> {
         todo!()
     }
 

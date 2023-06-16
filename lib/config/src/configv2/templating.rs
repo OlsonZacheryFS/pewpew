@@ -144,6 +144,19 @@ where
     }
 }
 
+impl<V, T, VD, ED> Template<V, T, VD, ED>
+where
+    V: FromStr,
+    T: TemplateType,
+    VD: Bool,
+    ED: Bool,
+    V::Err: StdError,
+{
+    pub fn new_literal(value: V) -> Self {
+        Self::Literal { value }
+    }
+}
+
 impl<V: FromStr, T: TemplateType> PropagateVars for Template<V, T, False, True>
 where
     T::VarsAllowed: OK,

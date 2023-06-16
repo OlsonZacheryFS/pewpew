@@ -13,7 +13,7 @@ mod util;
 use crate::error::TestError;
 use crate::stats::{create_stats_channel, create_try_run_stats_channel, StatsMessage};
 
-use config::configv2::{self, common::ProviderSend};
+use config::configv2::{self, common::ProviderSend, loggers::LogTo, templating::Template, Logger};
 
 use clap::{Args, Subcommand, ValueEnum};
 use ether::Either;
@@ -884,8 +884,19 @@ fn create_try_run_future(
             }
         })"#
     };
-    let to = try_config.file.unwrap_or_else(|| "stdout".into());
-    let logger = config::LoggerPreProcessed::from_str(select, &to).unwrap();
+    //let to = try_config.file.unwrap_or_else(|| "stdout".into());
+    //let logger = config::LoggerPreProcessed::from_str(select, &to).unwrap();
+    let to = try_config.file.map_or(LogTo::Stdout, |path| LogTo::File {
+        path: Template::new_literal(path),
+    });
+    // TODO: what are these values supposed to default to?
+    let logger = Logger {
+        query: None,
+        to,
+        pretty: true,
+        kill: true,
+        limit: None,
+    };
     if !try_config.loggers_on {
         debug!("loggers_on: {}. Clearing Loggers", try_config.loggers_on);
         config.clear_loggers();
@@ -1159,7 +1170,6 @@ fn get_loggers_from_config(
     config_loggers
         .into_iter()
         .map(|(name, mut logger)| {
-            use configv2::loggers::LogTo;
             //let to = mem::take(&mut logger.to);
             let name2 = name.clone();
             let writer = match logger.to {
