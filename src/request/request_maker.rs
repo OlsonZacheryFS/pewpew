@@ -123,11 +123,9 @@ impl RequestMaker {
                 }
             };
         }
-        let auto_returns = if auto_returns.is_empty() {
-            None
-        } else {
-            Some(join_all(auto_returns).map(|_| ()).shared())
-        };
+        let auto_returns = Some(auto_returns)
+            .filter(|ars| !ars.is_empty())
+            .map(|ars| join_all(ars).map(|_| ()).shared());
         let url = self
             .url
             .evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/);
