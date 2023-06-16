@@ -1,10 +1,12 @@
 use crate::error::{RecoverableError, TestError};
 use crate::stats;
 
-use config::configv2::templating::{Regular, True, VarsOnly};
-use config::configv2::EndPointBody;
 use config::{
-    configv2::{self, templating::Template},
+    configv2::{
+        self,
+        templating::{Regular, Template, True, VarsOnly},
+        EndPointBody,
+    },
     REQUEST_BODY, REQUEST_HEADERS, REQUEST_HEADERS_ALL, REQUEST_STARTLINE, REQUEST_URL,
 };
 use ether::EitherExt;
