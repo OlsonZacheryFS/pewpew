@@ -960,7 +960,7 @@ fn create_try_run_future(
         let static_tags = endpoint
             .tags
             .iter()
-            .filter_map(|(k, v)| v.as_static().map(|s| (k.clone(), s.to_owned())))
+            .map(|(k, v)| /*v.as_static().map(|s| (k.clone(), s.to_owned()))*/ (k.clone(), v.get().clone()))
             .collect();
 
         let builder = request::EndpointBuilder::new(endpoint, None);
