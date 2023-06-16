@@ -13,7 +13,7 @@ mod util;
 use crate::error::TestError;
 use crate::stats::{create_stats_channel, create_try_run_stats_channel, StatsMessage};
 
-use config::configv2;
+use config::configv2::{self, common::ProviderSend};
 
 use clap::{Args, Subcommand, ValueEnum};
 use ether::Either;
@@ -951,7 +951,7 @@ fn create_try_run_future(
             .provides
             .iter_mut()
             .filter_map(|(k, s)| {
-                s.set_send_behavior(config::EndpointProvidesSendOptions::Block);
+                s.set_send_behavior(ProviderSend::Block);
                 (!required_providers.contains(k)).then(|| k.clone())
             })
             .collect::<BTreeSet<_>>();

@@ -190,6 +190,12 @@ pub struct EndpointProvides {
     send: ProviderSend,
 }
 
+impl EndpointProvides {
+    pub fn set_send_behavior(&mut self, send: ProviderSend) {
+        self.send = send
+    }
+}
+
 impl From<EndpointProvides> for (Query, ProviderSend) {
     fn from(EndpointProvides { query, send }: EndpointProvides) -> Self {
         (query, send)
