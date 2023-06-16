@@ -38,20 +38,14 @@ use crate::error::{RecoverableError, TestError};
 use crate::providers;
 use crate::stats;
 use crate::util::tweak_path;
-use config::{
-    configv2::{
-        self,
-        common::ProviderSend,
-        endpoints::MultiPartBodySection,
-        query::Query,
-        scripting::{ProviderStream, ProviderStreamStream},
-        templating::{Regular, Template, True, VarsOnly},
-        EndPointBody,
-    },
-    BodyTemplate, EndpointProvidesSendOptions,
-    MultipartBody,
-    /*ProviderStream, Select,
-    Template,*/
+use config::configv2::{
+    self,
+    common::ProviderSend,
+    endpoints::MultiPartBodySection,
+    query::Query,
+    scripting::{ProviderStream, ProviderStreamStream},
+    templating::{Regular, Template, True, VarsOnly},
+    EndPointBody,
 };
 
 use std::{

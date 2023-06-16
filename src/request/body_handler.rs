@@ -1,9 +1,9 @@
 use crate::error::RecoverableError;
 use crate::stats;
 
-use config::{
-    configv2::templating::{Template, True, VarsOnly},
-    EndpointProvidesSendOptions,
+use config::configv2::{
+    common::ProviderSend,
+    templating::{Template, True, VarsOnly},
 };
 use ether::EitherExt;
 use futures::{
@@ -144,11 +144,8 @@ impl BodyHandler {
                 };
                 match send_behavior {
                     // This is where we actually send or block from a request
-                    EndpointProvidesSendOptions::Block => {
-                        debug!(
-                            "BodyHandler:handle EndpointProvidesSendOptions::Block {}",
-                            o.tx.name()
-                        );
+                    ProviderSend::Block => {
+                        debug!("BodyHandler:handle ProviderSend::Block {}", o.tx.name());
                         let tx = o.tx.clone();
                         let f = BlockSender::new(iter, tx).into_future().map(|_| Ok(()));
                         if o.tx.is_logger() {
@@ -157,11 +154,8 @@ impl BodyHandler {
                             blocked.push(f.boxed());
                         }
                     }
-                    EndpointProvidesSendOptions::Force => {
-                        debug!(
-                            "BodyHandler:handle EndpointProvidesSendOptions::Force {}",
-                            o.tx.name()
-                        );
+                    ProviderSend::Force => {
+                        debug!("BodyHandler:handle ProviderSend::Force {}", o.tx.name());
                         for v in iter {
                             let v = match v {
                                 Ok(v) => v,
@@ -176,11 +170,8 @@ impl BodyHandler {
                             }
                         }
                     }
-                    EndpointProvidesSendOptions::IfNotFull => {
-                        debug!(
-                            "BodyHandler:handle EndpointProvidesSendOptions::IfNotFull {}",
-                            o.tx.name()
-                        );
+                    ProviderSend::IfNotFull => {
+                        debug!("BodyHandler:handle ProviderSend::IfNotFull {}", o.tx.name());
                         for v in iter {
                             let v = match v {
                                 Ok(v) => v,
@@ -223,8 +214,6 @@ mod tests {
     use maplit::{btreemap, btreeset};
 
     use std::sync::atomic::{AtomicBool, Ordering};
-
-    use config::{EndpointProvidesSendOptions::*, Select};
 
     #[test]
     fn fix_body_handler_tests() {

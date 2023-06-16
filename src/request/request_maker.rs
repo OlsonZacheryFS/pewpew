@@ -5,8 +5,7 @@ use config::configv2::templating::{Regular, True, VarsOnly};
 use config::configv2::EndPointBody;
 use config::{
     configv2::{self, templating::Template},
-    BodyTemplate, /*Template,*/ REQUEST_BODY, REQUEST_HEADERS, REQUEST_HEADERS_ALL,
-    REQUEST_STARTLINE, REQUEST_URL,
+    REQUEST_BODY, REQUEST_HEADERS, REQUEST_HEADERS_ALL, REQUEST_STARTLINE, REQUEST_URL,
 };
 use ether::EitherExt;
 use futures::{
