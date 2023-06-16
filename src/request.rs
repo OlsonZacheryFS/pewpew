@@ -614,15 +614,15 @@ async fn create_file_hyper_body(filename: String) -> Result<(u64, HyperBody), Te
 }
 
 fn body_template_as_hyper_body(
-    body_template: &BodyTemplate,
+    body_template: &Option<EndPointBody>,
     template_values: &TemplateValues,
     copy_body_value: bool,
     body_value: &mut Option<String>,
     content_type_entry: HeaderEntry<'_, HeaderValue>,
 ) -> impl Future<Output = Result<(u64, HyperBody), TestError>> {
-    let template = match body_template {
-        BodyTemplate::File(_, t) => t,
-        BodyTemplate::Multipart(m) => {
+    let template = match body_template.as_ref() {
+        Some(EndPointBody::File(_, t)) => t,
+        Some(EndPointBody::Multipart(m)) => {
             let r = multipart_body_as_hyper_body(
                 m,
                 template_values,
@@ -632,14 +632,14 @@ fn body_template_as_hyper_body(
             );
             return Either3::A(future::ready(r).and_then(|x| x));
         }
-        BodyTemplate::None => return Either3::B(future::ok((0, HyperBody::empty()))),
-        BodyTemplate::String(t) => t,
+        Some(EndPointBody::String(t)) => t,
+        None => return Either3::B(future::ok((0, HyperBody::empty()))),
     };
-    let mut body = match template.evaluate(Cow::Borrowed(template_values.as_json()), None) {
+    let mut body = match template.evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/) {
         Ok(b) => b,
-        Err(e) => return Either3::B(future::err(TestError::from(e))),
+        Err(e) => todo!(), //return Either3::B(future::err(TestError::from(e))),
     };
-    if let BodyTemplate::File(path, _) = body_template {
+    if let Some(EndPointBody::File(path, _)) = body_template {
         tweak_path(&mut body, path);
         if copy_body_value {
             *body_value = Some(format!("<<contents of file: {body}>>"));
