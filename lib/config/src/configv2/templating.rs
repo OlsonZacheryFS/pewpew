@@ -21,8 +21,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Deserialize;
 use std::{
-    collections::BTreeMap, convert::TryFrom, error::Error as StdError, iter::FromIterator,
-    str::FromStr, sync::Arc,
+    borrow::Cow, collections::BTreeMap, convert::TryFrom, error::Error as StdError,
+    iter::FromIterator, str::FromStr, sync::Arc,
 };
 use thiserror::Error;
 
@@ -89,6 +89,10 @@ where
             ),
             _ => unreachable!(),
         }
+    }
+
+    pub fn evaluate(&self, _data: Cow<'_, serde_json::Value>) -> Result<String, Box<dyn StdError>> {
+        todo!()
     }
 
     pub fn as_static(&self) -> Option<&str> {

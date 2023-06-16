@@ -1,9 +1,12 @@
 use crate::error::{RecoverableError, TestError};
 use crate::stats;
 
+use config::configv2::templating::{Regular, True, VarsOnly};
+use config::configv2::EndPointBody;
 use config::{
-    BodyTemplate, Template, REQUEST_BODY, REQUEST_HEADERS, REQUEST_HEADERS_ALL, REQUEST_STARTLINE,
-    REQUEST_URL,
+    configv2::{self, templating::Template},
+    BodyTemplate, /*Template,*/ REQUEST_BODY, REQUEST_HEADERS, REQUEST_HEADERS_ALL,
+    REQUEST_STARTLINE, REQUEST_URL,
 };
 use ether::EitherExt;
 use futures::{
@@ -36,10 +39,10 @@ use std::{
 };
 
 pub(super) struct RequestMaker {
-    pub(super) url: Template,
+    pub(super) url: Template<String, Regular, True>,
     pub(super) method: Method,
-    pub(super) headers: Vec<(String, Template)>,
-    pub(super) body: BodyTemplate,
+    pub(super) headers: configv2::common::Headers<True>,
+    pub(super) body: Option<EndPointBody>,
     pub(super) rr_providers: u16,
     pub(super) client:
         Arc<Client<HttpsConnector<HttpConnector<hyper::client::connect::dns::GaiResolver>>>>,
@@ -47,7 +50,7 @@ pub(super) struct RequestMaker {
     pub(super) no_auto_returns: bool,
     pub(super) outgoing: Arc<Vec<Outgoing>>,
     pub(super) precheck_rr_providers: u16,
-    pub(super) tags: Arc<BTreeMap<String, Template>>,
+    pub(super) tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
     pub(super) timeout: Duration,
 }
 
@@ -128,10 +131,10 @@ impl RequestMaker {
         };
         let url = self
             .url
-            .evaluate(Cow::Borrowed(template_values.as_json()), None);
+            .evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/);
         let url = match url {
             Ok(u) => u,
-            Err(e) => return future::ready(Err(e.into())).a(),
+            Err(e) => todo!(), //return future::ready(Err(e.into())).a(),
         };
         let url = match url::Url::parse(&url) {
             Ok(u) => u,
@@ -150,7 +153,8 @@ impl RequestMaker {
                 let key = HeaderName::from_bytes(k.as_bytes())
                     .map_err(|e| RecoverableError::BodyErr(Arc::new(e)))?;
                 let value = HeaderValue::from_str(
-                    &v.evaluate(Cow::Borrowed(template_values.as_json()), None)?,
+                    &v.evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/)
+                        .expect("TODO"),
                 )
                 .map_err(|e| RecoverableError::BodyErr(Arc::new(e)))?;
                 Ok::<_, TestError>((key, value))
@@ -338,9 +342,9 @@ impl RequestMaker {
                     let tags = tags2
                         .iter()
                         .filter_map(|(k, v)| {
-                            v.evaluate(Cow::Borrowed(template_values2.as_json()), None)
+                            /*v.evaluate(Cow::Borrowed(template_values2.as_json()), None)
                                 .ok()
-                                .map(move |v| (k.clone(), v))
+                                .map(move |v| (k.clone(), v))*/ Some((k.clone(), v.get().clone()))
                         })
                         .collect();
                     let tags = Arc::new(tags);
@@ -398,6 +402,12 @@ mod tests {
     use tokio::runtime::Runtime;
 
     #[test]
+    fn fix_request_maker_test() {
+        todo!("FIX THE REQUEST MAKER TEST")
+    }
+
+    /*
+    #[test]
     fn sends_request() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
@@ -434,4 +444,5 @@ mod tests {
             assert!(r.is_ok());
         });
     }
+    */
 }
