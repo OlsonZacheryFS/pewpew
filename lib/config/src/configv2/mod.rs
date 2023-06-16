@@ -5,6 +5,7 @@ use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashMap},
     hash::Hash,
+    path::PathBuf,
 };
 use thiserror::Error;
 
@@ -115,10 +116,15 @@ pub enum LoadTestGenError {
 impl LoadTest<True, True> {
     pub fn from_yaml(
         yaml: &str,
+        file_path: &PathBuf,
         env_vars: &BTreeMap<String, String>,
     ) -> Result<Self, LoadTestGenError> {
         let mut pre_vars =
             serde_yaml::from_str::<LoadTest<False, False>>(yaml)?.insert_env_vars(&env_vars)?;
+        pre_vars
+            .endpoints
+            .iter_mut()
+            .for_each(|e| e.insert_path(file_path));
         let vars = VarValue::Nested(std::mem::take(&mut pre_vars.vars));
         Ok(pre_vars.insert_vars(&vars)?)
     }

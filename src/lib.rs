@@ -467,6 +467,7 @@ async fn _create_run(
     let config_file_path = exec_config.get_config_file().clone();
     let mut config = configv2::LoadTest::from_yaml(
         std::str::from_utf8(&config_bytes).expect("TODO: HANDLE THIS"),
+        exec_config.get_config_file(),
         &env_vars,
     )
     .expect("TODO");
@@ -728,6 +729,7 @@ fn create_config_watcher(
 
             let config = configv2::LoadTest::from_yaml(
                 std::str::from_utf8(&config_bytes).expect("TODO"),
+                &config_file_path,
                 &env_vars,
             );
             let mut config = match config {

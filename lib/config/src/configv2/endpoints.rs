@@ -13,6 +13,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     convert::TryFrom,
     num::NonZeroUsize,
+    path::PathBuf,
     str::FromStr,
 };
 use thiserror::Error;
@@ -69,6 +70,14 @@ impl PropagateVars for Endpoint<False> {
     }
 }
 
+impl Endpoint<False> {
+    pub fn insert_path(&mut self, path: &PathBuf) {
+        if let Some(body) = self.body.as_mut() {
+            body.add_file_path(path)
+        }
+    }
+}
+
 /// Newtype wrapper around [`http::Method`] for implementing [`serde::Deserialize`].
 #[derive(Deserialize, Debug, Default, Deref, FromStr, PartialEq, Eq)]
 #[serde(try_from = "&str")]
@@ -89,8 +98,18 @@ impl TryFrom<&str> for Method {
 pub enum EndPointBody<VD: Bool = True> {
     #[serde(rename = "str")]
     String(Template<String, Regular, VD>),
-    File(Template<String, Regular, VD>),
+    File(#[serde(skip)] PathBuf, Template<String, Regular, VD>),
     Multipart(HashMap<String, MultiPartBodySection<VD>>),
+}
+
+impl EndPointBody<False> {
+    fn add_file_path(&mut self, path: &PathBuf) {
+        match self {
+            Self::File(p, _) => *p = path.clone(),
+            Self::Multipart(m) => m.values_mut().for_each(|s| s.body.add_file_path(path)),
+            _ => (),
+        }
+    }
 }
 
 impl PropagateVars for EndPointBody<False> {
@@ -100,7 +119,7 @@ impl PropagateVars for EndPointBody<False> {
         use EndPointBody::*;
         match self {
             String(s) => s.insert_vars(vars).map(String),
-            File(f) => f.insert_vars(vars).map(File),
+            File(p, f) => f.insert_vars(vars).map(|f| File(p, f)),
             Multipart(mp) => mp.insert_vars(vars).map(Multipart),
         }
     }
@@ -235,7 +254,7 @@ mod tests {
             }
         );
 
-        let EndPointBody::<False>::File(file) = from_yaml("type: file\ncontent: !l body.txt").unwrap() else {
+        let EndPointBody::<False>::File(_, file) = from_yaml("type: file\ncontent: !l body.txt").unwrap() else {
             panic!("was not file variant")
         };
         assert_eq!(
@@ -272,9 +291,12 @@ content:
                     }
                 )]
                 .into(),
-                body: EndPointBody::File(Template::Literal {
-                    value: "foo.jpg".to_owned()
-                })
+                body: EndPointBody::File(
+                    Default::default(),
+                    Template::Literal {
+                        value: "foo.jpg".to_owned()
+                    }
+                )
             }
         );
         assert_eq!(
