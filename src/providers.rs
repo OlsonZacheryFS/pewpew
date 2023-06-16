@@ -9,7 +9,7 @@ use crate::line_writer::MsgType;
 use crate::util::{config_limit_to_channel_limit, json_value_to_string};
 use crate::TestEndReason;
 
-use config::configv2;
+use config::configv2::{self, common::ProviderSend};
 use ether::Either3;
 use futures::{
     channel::mpsc::{self, channel, Sender as FCSender},
@@ -34,7 +34,7 @@ use std::{
 
 #[derive(Clone)]
 pub struct Provider {
-    pub auto_return: Option<config::EndpointProvidesSendOptions>,
+    pub auto_return: Option<ProviderSend>,
     pub rx: channel::Receiver<json::Value>,
     pub tx: channel::Sender<json::Value>,
     pub on_demand: channel::OnDemandReceiver<json::Value>,
@@ -42,7 +42,7 @@ pub struct Provider {
 
 impl Provider {
     fn new(
-        auto_return: Option<config::EndpointProvidesSendOptions>,
+        auto_return: Option<ProviderSend>,
         rx: channel::Receiver<json::Value>,
         tx: channel::Sender<json::Value>,
     ) -> Self {
@@ -106,7 +106,7 @@ pub fn file(
     debug!("Provider::file tokio::spawn primer_task");
     tokio::spawn(primer_task);
 
-    Ok(Provider::new(fp.auto_return.map(Into::into), rx, tx))
+    Ok(Provider::new(fp.auto_return, rx, tx))
 }
 
 // create a response provider
@@ -120,7 +120,7 @@ pub fn response(
     let limit = config_limit_to_channel_limit(rp.buffer, auto_buffer_start_size);
     let (tx, rx) = channel::channel(limit, rp.unique, name);
 
-    Provider::new(rp.auto_return.map(From::from), rx, tx)
+    Provider::new(rp.auto_return, rx, tx)
 }
 
 // create a list provider

@@ -71,14 +71,14 @@ use std::{
 
 #[derive(Clone)]
 pub struct AutoReturn {
-    send_option: EndpointProvidesSendOptions,
+    send_option: ProviderSend,
     channel: channel::Sender<json::Value>,
     jsons: Vec<json::Value>,
 }
 
 impl AutoReturn {
     pub fn new(
-        send_option: EndpointProvidesSendOptions,
+        send_option: ProviderSend,
         channel: channel::Sender<json::Value>,
         jsons: Vec<json::Value>,
     ) -> Self {
@@ -92,19 +92,19 @@ impl AutoReturn {
     pub async fn into_future(mut self) {
         debug!("AutoReturn::into_future.send_option={:?}", self.send_option);
         match self.send_option {
-            EndpointProvidesSendOptions::Block => {
+            ProviderSend::Block => {
                 let _ = self
                     .channel
                     .send_all(&mut stream::iter(self.jsons).map(Ok))
                     .await;
             }
-            EndpointProvidesSendOptions::Force => {
+            ProviderSend::Force => {
                 while let Some(json) = self.jsons.pop() {
                     log::trace!("AutoReturn::into_future::Force json={}", json);
                     self.channel.force_send(json);
                 }
             }
-            EndpointProvidesSendOptions::IfNotFull => {
+            ProviderSend::IfNotFull => {
                 while let Some(json) = self.jsons.pop() {
                     log::trace!("AutoReturn::into_future::IfNotFull json={}", json);
                     if self.channel.send(json).now_or_never().is_none() {
