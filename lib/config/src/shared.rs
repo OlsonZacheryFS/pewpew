@@ -9,7 +9,7 @@ use std::time::Duration;
 ///
 /// # Panics
 /// Can panic if the duration string contains a value larger than [`u64::MAX`].
-pub(crate) fn duration_from_string(dur: &str) -> Option<Duration> {
+pub fn duration_from_string(dur: &str) -> Option<Duration> {
     const BASE_RE: &str = r"(?i)(\d+)\s*(d|h|m|s|days?|hrs?|mins?|secs?|hours?|minutes?|seconds?)";
     static SANITY_RE: Lazy<Regex> = Lazy::new(|| {
         Regex::new(&format!(r"^(?:{BASE_RE}\s*)+$")).expect("should be a valid regex")

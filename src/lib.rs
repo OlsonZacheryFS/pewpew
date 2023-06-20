@@ -264,7 +264,7 @@ pub struct RunConfig {
     #[arg(short = 'd', long = "results-directory", value_name = "DIRECTORY")]
     pub results_dir: Option<PathBuf>,
     /// Specify the time the test should start at
-    #[arg(value_parser = |s: &str| config::duration_from_string(s.into()), short = 't', long)]
+    #[arg(value_parser = |s: &str| config::duration_from_string(s.into()).ok_or("invalid duration"), short = 't', long)]
     pub start_at: Option<Duration>,
     /// Specify the filename for the stats file
     #[arg(short = 'o', long)]

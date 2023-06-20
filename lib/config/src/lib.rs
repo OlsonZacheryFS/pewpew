@@ -4,3 +4,5 @@ pub use configv1::*;
 pub mod configv2;
 
 mod shared;
+
+pub use shared::duration_from_string;
