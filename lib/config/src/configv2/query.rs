@@ -10,6 +10,7 @@ use serde_json::Value as SJVal;
 use std::{
     cell::{OnceCell, RefCell},
     collections::{BTreeMap, VecDeque},
+    sync::Arc,
 };
 
 #[derive(Debug, Deserialize, Derivative)]
@@ -28,20 +29,25 @@ fn get_context() -> RefCell<Context> {
 }
 
 impl Query {
-    fn query(
-        &self,
-        request: SJVal,
-        response: SJVal,
-        stats: SJVal,
-    ) -> impl Iterator<Item = SJVal> + Send {
+    fn query(&self, data: Arc<SJVal>) -> impl Iterator<Item = SJVal> + Send {
         let mut ctx = self.ctx.borrow_mut();
         let ctx = &mut ctx;
+        let data = data.as_object().unwrap();
+        let response = data.get("response");
+        let request = data.get("request");
+        let stats = data.get("stats");
         IntoIterator::into_iter([
             ("request", &request),
             ("response", &response),
             ("stats", &stats),
         ])
-        .map(|(n, o)| (n, JsValue::from_json(o, ctx).unwrap()))
+        .map(|(n, o)| {
+            (
+                n,
+                o.and_then(|o| JsValue::from_json(o, ctx).ok())
+                    .unwrap_or(JsValue::Undefined),
+            )
+        })
         .collect_vec()
         .into_iter()
         .for_each(|(n, o)| ctx.register_global_property(n, o, Attribute::READONLY));
@@ -166,7 +172,9 @@ mod tests {
             ctx: get_context(),
         };
         let response = serde_json::json! { {"body": {"session": "abc123"}, "status": 200} };
-        let res = q.query(SJVal::Null, response, SJVal::Null).collect_vec();
+        let res = q
+            .query(Arc::new(serde_json::json!({ "response": response })))
+            .collect_vec();
         assert_eq!(res, vec![SJVal::String("abc123".to_owned())]);
 
         let q = Query {
@@ -212,7 +220,9 @@ mod tests {
         }
 
         }};
-        let res = q.query(SJVal::Null, response, SJVal::Null).collect_vec();
+        let res = q
+            .query(Arc::new(serde_json::json!({ "response": response })))
+            .collect_vec();
         assert_eq!(
             res,
             vec![
