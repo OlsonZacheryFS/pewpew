@@ -93,11 +93,11 @@ impl BodyHandler {
                         .insert("error".into(), error);
                     let tv: Arc<_> = tv.into();
                     for o in outgoing.iter() {
-                        let select = o.select.clone();
-                        let tv = tv.clone();
+                        let query = Arc::clone(&o.query);
+                        let tv = Arc::clone(&tv);
                         if let ProviderOrLogger::Logger(tx) = &o.tx {
-                            if let Ok(iter) = select.iter(tv) {
-                                let iter = iter.map(|v| v.map_err(Into::into));
+                            if let Ok(iter) = query.query(tv) {
+                                let iter = iter.map(|v| v.map_err(|_| todo!() /*Into::into*/));
                                 futures.push(
                                     BlockSender::new(iter, ProviderOrLogger::Logger(tx.clone()))
                                         .into_future(),
@@ -131,10 +131,13 @@ impl BodyHandler {
                 if !self.included_outgoing_indexes.contains(&i) {
                     continue;
                 }
-                let select = o.select.clone();
-                let send_behavior = select.get_send_behavior();
-                let iter = match select.iter(template_values.clone()).map_err(Into::into) {
-                    Ok(v) => v.map(|v| v.map_err(Into::into)),
+                let query = Arc::clone(&o.query);
+                let send_behavior = o.send;
+                let iter = match query
+                    .query(template_values.clone())
+                    .map_err(|_| todo!() /*Into::into*/)
+                {
+                    Ok(v) => v.map(|v| v.map_err(|_| todo!() /*Into::into*/)),
                     Err(e) => {
                         let r = RecoverableError::ExecutingExpression(e);
                         let kind = stats::StatKind::RecoverableError(r);
