@@ -28,7 +28,12 @@ fn get_context() -> RefCell<Context> {
 }
 
 impl Query {
-    fn query(&self, request: SJVal, response: SJVal, stats: SJVal) -> Option<SJVal> {
+    fn query(
+        &self,
+        request: SJVal,
+        response: SJVal,
+        stats: SJVal,
+    ) -> impl Iterator<Item = SJVal> + Send {
         let mut ctx = self.ctx.borrow_mut();
         let ctx = &mut ctx;
         IntoIterator::into_iter([
@@ -37,51 +42,53 @@ impl Query {
             ("stats", &stats),
         ])
         .map(|(n, o)| (n, JsValue::from_json(o, ctx).unwrap()))
-        .collect::<Vec<_>>()
+        .collect_vec()
         .into_iter()
         .for_each(|(n, o)| ctx.register_global_property(n, o, Attribute::READONLY));
-        self.r#where
-            .as_ref()
-            .map_or(true, |w| w.execute_on(ctx).unwrap().as_boolean().unwrap())
-            .then(|| {
-                let for_each: Vec<VecDeque<JsValue>> = self
-                    .for_each
-                    .iter()
-                    .map(|fe| fe.execute_on(ctx).unwrap())
-                    .collect_vec()
-                    .into_iter()
-                    .map(|jv| match jv {
-                        JsValue::Object(o) if o.is_array() => {
-                            let a = JsArray::from_object(o, ctx).unwrap();
-                            let mut vd = VecDeque::with_capacity(a.length(ctx).unwrap() as usize);
-                            std::iter::repeat_with(|| a.pop(ctx).unwrap())
-                                .take_while(|v| !v.is_null_or_undefined())
-                                .for_each(|v| vd.push_front(v));
-                            vd
-                        }
-                        v => vec![v].into(),
-                    })
-                    .collect();
-                let for_each = for_each
-                    .into_iter()
-                    .multi_cartesian_product()
-                    .map(|v| JsArray::from_iter(v, ctx).into())
-                    .collect_vec();
-                let for_each = if for_each.is_empty() {
-                    vec![JsValue::Undefined]
-                } else {
-                    for_each
-                };
-
-                let data = for_each
-                    .into_iter()
-                    .map(|x| {
-                        ctx.register_global_property("for_each", x, Attribute::READONLY);
-                        self.select.select(ctx).unwrap()
-                    })
-                    .collect_vec();
-                SJVal::Array(data.into_iter().map(|x| x.to_json(ctx).unwrap()).collect())
+        let for_each = {
+            let for_each: Vec<VecDeque<JsValue>> = self
+                .for_each
+                .iter()
+                .map(|fe| fe.execute_on(ctx).unwrap())
+                .collect_vec()
+                .into_iter()
+                .map(|jv| match jv {
+                    JsValue::Object(o) if o.is_array() => {
+                        let a = JsArray::from_object(o, ctx).unwrap();
+                        let mut vd = VecDeque::with_capacity(a.length(ctx).unwrap() as usize);
+                        std::iter::repeat_with(|| a.pop(ctx).unwrap())
+                            .take_while(|v| !v.is_null_or_undefined())
+                            .for_each(|v| vd.push_front(v));
+                        vd
+                    }
+                    v => vec![v].into(),
+                })
+                .collect();
+            let for_each = for_each
+                .into_iter()
+                .multi_cartesian_product()
+                .map(|v| JsArray::from_iter(v, ctx).into())
+                .collect_vec();
+            if for_each.is_empty() {
+                vec![JsValue::Undefined]
+            } else {
+                for_each
+            }
+        };
+        for_each
+            .into_iter()
+            .filter_map(|x| {
+                ctx.register_global_property("for_each", x, Attribute::READONLY);
+                self.r#where
+                    .as_ref()
+                    .map_or(true, |w| w.execute_on(ctx).unwrap().as_boolean().unwrap())
+                    .then(|| self.select.select(ctx).unwrap())
             })
+            .collect_vec()
+            .into_iter()
+            .map(|x| x.to_json(ctx).unwrap())
+            .collect_vec()
+            .into_iter()
     }
 }
 
@@ -159,8 +166,8 @@ mod tests {
             ctx: get_context(),
         };
         let response = serde_json::json! { {"body": {"session": "abc123"}, "status": 200} };
-        let res = q.query(SJVal::Null, response, SJVal::Null).unwrap();
-        assert_eq!(res, SJVal::Array(vec![SJVal::String("abc123".to_owned())]));
+        let res = q.query(SJVal::Null, response, SJVal::Null).collect_vec();
+        assert_eq!(res, vec![SJVal::String("abc123".to_owned())]);
 
         let q = Query {
             select: Select::Map(
@@ -205,10 +212,14 @@ mod tests {
         }
 
         }};
-        let res = q.query(SJVal::Null, response, SJVal::Null).unwrap();
+        let res = q.query(SJVal::Null, response, SJVal::Null).collect_vec();
         assert_eq!(
             res,
-            serde_json::json!([{"name": "Luke Skywalker"}, {"name": "Darth Vader"}, {"name": "R2-D2"}])
+            vec![
+                serde_json::json!({"name": "Luke Skywalker"}),
+                serde_json::json!({"name": "Darth Vader"}),
+                serde_json::json!({"name": "R2-D2"})
+            ]
         );
     }
 }
