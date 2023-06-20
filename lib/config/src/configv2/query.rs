@@ -24,6 +24,10 @@ pub struct Query {
     ctx: RefCell<Context>,
 }
 
+/// TODO: find solution for this
+unsafe impl Send for Query {}
+unsafe impl Sync for Query {}
+
 fn get_context() -> RefCell<Context> {
     RefCell::from(Context::default()) // grab the scripting context if the functions are needed
 }
