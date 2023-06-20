@@ -43,6 +43,12 @@ pub enum ProviderSend {
     IfNotFull,
 }
 
+impl ProviderSend {
+    pub fn is_block(&self) -> bool {
+        matches!(self, Self::Block)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
