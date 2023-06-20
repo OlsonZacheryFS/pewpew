@@ -745,7 +745,7 @@ impl Endpoint {
         let tags = self.tags;
         let blocking_outgoing: Vec<_> = outgoing
             .iter()
-            .filter_map(|o| match (&o.tx, o.select.get_send_behavior().is_block()) {
+            .filter_map(|o| match (&o.tx, o.send.is_block()) {
                 (ProviderOrLogger::Provider(tx), true) => Some(tx.clone()),
                 _ => None,
             })

@@ -356,11 +356,11 @@ impl RequestMaker {
                         template_values2.insert("error".into(), error);
                         let template_values: Arc<_> = template_values2.0.into();
                         for o in outgoing2.iter() {
-                            let select = o.select.clone();
+                            let query = Arc::clone(&o.query);
                             if let (true, Ok(iter)) =
-                                (o.tx.is_logger(), select.iter(template_values.clone()))
+                                (o.tx.is_logger(), query.query(Arc::clone(&template_values)))
                             {
-                                let iter = iter.map(|v| v.map_err(Into::into));
+                                let iter = iter.map(|v| v.map_err(|_| todo!() /*Into::into*/));
                                 let tx = o.tx.clone();
                                 futures.push(BlockSender::new(iter, tx).into_future());
                             }
