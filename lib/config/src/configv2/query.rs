@@ -29,7 +29,10 @@ fn get_context() -> RefCell<Context> {
 }
 
 impl Query {
-    fn query(&self, data: Arc<SJVal>) -> impl Iterator<Item = SJVal> + Send {
+    pub fn query(
+        &self,
+        data: Arc<SJVal>,
+    ) -> Result<impl Iterator<Item = Result<SJVal, ()>> + Send, ()> {
         let mut ctx = self.ctx.borrow_mut();
         let ctx = &mut ctx;
         let data = data.as_object().unwrap();
@@ -81,7 +84,7 @@ impl Query {
                 for_each
             }
         };
-        for_each
+        Ok(for_each
             .into_iter()
             .filter_map(|x| {
                 ctx.register_global_property("for_each", x, Attribute::READONLY);
@@ -92,9 +95,9 @@ impl Query {
             })
             .collect_vec()
             .into_iter()
-            .map(|x| x.to_json(ctx).unwrap())
+            .map(|x| Ok(x.to_json(ctx).unwrap()))
             .collect_vec()
-            .into_iter()
+            .into_iter())
     }
 }
 
@@ -174,7 +177,9 @@ mod tests {
         let response = serde_json::json! { {"body": {"session": "abc123"}, "status": 200} };
         let res = q
             .query(Arc::new(serde_json::json!({ "response": response })))
-            .collect_vec();
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(res, vec![SJVal::String("abc123".to_owned())]);
 
         let q = Query {
@@ -222,7 +227,9 @@ mod tests {
         }};
         let res = q
             .query(Arc::new(serde_json::json!({ "response": response })))
-            .collect_vec();
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(
             res,
             vec![
