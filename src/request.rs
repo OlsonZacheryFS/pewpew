@@ -172,14 +172,16 @@ impl ProviderOrLogger {
 }
 
 struct Outgoing {
-    qps: Arc<(Query, ProviderSend)>,
+    query: Arc<Query>,
+    send: ProviderSend,
     tx: ProviderOrLogger,
 }
 
 impl Outgoing {
-    fn new(qps: (Query, ProviderSend), tx: ProviderOrLogger) -> Self {
+    fn new(query: Query, send: ProviderSend, tx: ProviderOrLogger) -> Self {
         Self {
-            qps: qps.into(),
+            query: query.into(),
+            send,
             tx,
         }
     }
@@ -315,7 +317,8 @@ impl EndpointBuilder {
                     let stream = provider.on_demand.clone();
                     on_demand_streams.push(Box::new(stream));
                 }
-                Outgoing::new(v.into(), ProviderOrLogger::Provider(tx))
+                let (query, send) = v.into();
+                Outgoing::new(query, send, ProviderOrLogger::Provider(tx))
             })
             .collect();
 
@@ -342,8 +345,10 @@ impl EndpointBuilder {
                 .loggers
                 .get(&k)
                 .expect("logs should reference a valid logger");
+            let (query, send) = v.into();
             outgoing.push(Outgoing::new(
-                v.into(),
+                query,
+                send,
                 ProviderOrLogger::Logger(tx.clone()),
             ));
         }
