@@ -82,11 +82,14 @@ impl EvalExpr {
     pub fn into_stream<P, Ar, E>(
         self,
         providers: &BTreeMap<String, P>,
-    ) -> Result<impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send, IntoStreamError>
+    ) -> Result<
+        impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static,
+        IntoStreamError,
+    >
     where
         P: ProviderStream<Ar, Err = E> + Sized + 'static,
         Ar: Clone + Send + Unpin + 'static,
-        E: Unpin + std::error::Error,
+        E: Unpin + std::error::Error + 'static,
     {
         let Self { mut ctx, needed } = self;
         let providers = needed

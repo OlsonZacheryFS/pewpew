@@ -1,7 +1,7 @@
 use rand::seq::SliceRandom;
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 #[serde(from = "ListProviderTmp")]
 pub struct ListProvider {
     values: Vec<serde_json::Value>,

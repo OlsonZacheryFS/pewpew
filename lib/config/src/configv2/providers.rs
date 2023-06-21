@@ -15,7 +15,7 @@ pub use file::{CsvHeaders, CsvParams, FileProvider, FileReadFormat};
 pub use list::ListProvider;
 pub use range::RangeProvider;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderType<VD: Bool = True> {
     File(file::FileProvider<VD>),
@@ -24,7 +24,7 @@ pub enum ProviderType<VD: Bool = True> {
     Range(range::RangeProvider),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 pub struct ResponseProvider {
     pub auto_return: Option<ProviderSend>,
     #[serde(default)]

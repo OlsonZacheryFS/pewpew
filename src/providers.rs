@@ -58,7 +58,7 @@ impl Provider {
 // create a file provider. It takes a "test_killer" because a file provider has the means of killing a test
 // if it encounters an error while reading from the file
 pub fn file(
-    mut fp: configv2::providers::FileProvider,
+    fp: configv2::providers::FileProvider,
     test_killer: broadcast::Sender<Result<TestEndReason, TestError>>,
     name: &str,
     auto_buffer_start_size: usize,
@@ -69,8 +69,8 @@ pub fn file(
     let file2 = file.clone();
     // create a stream from the file that yields values
     let stream = match fp.format {
-        configv2::providers::FileReadFormat::Csv(csv) => Either3::A(into_stream(
-            CsvReader::new(&fp, &csv, &file)
+        configv2::providers::FileReadFormat::Csv(ref csv) => Either3::A(into_stream(
+            CsvReader::new(&fp, csv, &file)
                 .map_err(|e| TestError::CannotOpenFile(file.into(), e.into()))?,
         )),
         configv2::providers::FileReadFormat::Json => Either3::B(into_stream(

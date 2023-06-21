@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::{convert::TryFrom, num::NonZeroU16, ops::Add};
 use thiserror::Error;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone, Copy)]
 #[serde(default)]
 pub struct RangeProvider {
     start: i64,

@@ -186,14 +186,6 @@ impl Outgoing {
         }
     }
 }
-/*
-type ProviderStreamStream<Ar> = Box<
-    dyn Stream<Item = Result<(json::Value, Vec<Ar>), config::ExecutingExpressionError>>
-        + Send
-        + Unpin
-        + 'static,
->;
-        */
 
 #[derive(Debug, Clone, Copy, Error)]
 #[error("Temp")]
@@ -248,27 +240,11 @@ impl EndpointBuilder {
         }
     }
 
-    pub fn build(self, ctx: &mut BuilderContext) -> Endpoint {
+    pub fn build(self, ctx: &BuilderContext) -> Endpoint {
         let mut outgoing = Vec::new();
         let mut on_demand_streams: OnDemandStreams = Vec::new();
 
-        /*
-        let config::Endpoint {
-            method,
-            headers,
-            body,
-            no_auto_returns,
-            providers_to_stream,
-            url,
-            max_parallel_requests,
-            provides,
-            logs,
-            on_demand,
-            tags,
-            request_timeout,
-            ..
-        } = self.endpoint;
-        */
+        let providers_to_stream = self.endpoint.get_required_providers();
         let configv2::Endpoint {
             method,
             headers,
@@ -359,10 +335,10 @@ impl EndpointBuilder {
                                               // go through the list of required providers and make sure we have them all
 
         // TODO: try actually using the providers the endpoint needs.
-        for name in ctx.providers.keys()
+        for name in providers_to_stream
         /*.unique_providers()*/
         {
-            let provider = match ctx.providers.get(name) {
+            let provider = match ctx.providers.get(&name) {
                 Some(p) => p,
                 None => continue,
             };
@@ -408,7 +384,7 @@ impl EndpointBuilder {
             client,
             headers,
             max_parallel_requests,
-            method: *method,
+            method: method.clone().into(),
             no_auto_returns,
             on_demand_streams,
             outgoing, // loggers

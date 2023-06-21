@@ -99,7 +99,7 @@ impl Endpoints {
     fn build<F>(
         self,
         filter_fn: F,
-        builder_ctx: &mut request::BuilderContext,
+        builder_ctx: &request::BuilderContext,
         response_providers: &BTreeSet<String>,
     ) -> Result<Vec<impl Future<Output = Result<(), TestError>> + Send>, TestError>
     where
@@ -987,7 +987,7 @@ fn create_try_run_future(
     let test_complete = BroadcastStream::new(test_ended_tx.subscribe());
     let stats_tx = create_try_run_stats_channel(test_complete, stderr);
 
-    let mut builder_ctx = request::BuilderContext {
+    let builder_ctx = request::BuilderContext {
         config: config_config,
         config_path: try_config.config_file,
         client: Arc::new(client),
@@ -996,7 +996,7 @@ fn create_try_run_future(
         stats_tx,
     };
 
-    let endpoint_calls = endpoints.build(filter_fn, &mut builder_ctx, &response_providers)?;
+    let endpoint_calls = endpoints.build(filter_fn, &builder_ctx, &response_providers)?;
 
     let mut test_ended_rx = BroadcastStream::new(test_ended_tx.subscribe());
     let mut left = try_join_all(endpoint_calls).map(move |r| {
@@ -1081,7 +1081,7 @@ fn create_load_test_future(
 
     let client = create_http_client(*config_config.client.keepalive)?;
 
-    let mut builder_ctx = request::BuilderContext {
+    let builder_ctx = request::BuilderContext {
         config: config_config,
         config_path: run_config.config_file,
         client: Arc::new(client),
@@ -1092,7 +1092,7 @@ fn create_load_test_future(
 
     let endpoint_calls = builders
         .into_iter()
-        .map(move |builder| builder.build(&mut builder_ctx).into_future());
+        .map(move |builder| builder.build(&builder_ctx).into_future());
 
     let _ = stats_tx.unbounded_send(StatsMessage::Start(duration));
     let mut f = try_join_all(endpoint_calls);
@@ -1143,19 +1143,18 @@ fn get_providers_from_config(
 ) -> ProvidersResult {
     let mut providers = BTreeMap::new();
     let mut response_providers = BTreeSet::new();
-    let default_buffer_size = config::default_auto_buffer_start_size();
     for (name, template) in config_providers {
         use configv2::providers::ProviderType;
         let provider = match template.clone() {
-            ProviderType::Range(rg) => providers::range(*rg, name),
-            ProviderType::List(lp) => providers::list(*lp, name),
+            ProviderType::Range(rg) => providers::range(rg, name),
+            ProviderType::List(lp) => providers::list(lp, name),
             ProviderType::File(mut f) => {
                 util::tweak_path(f.path.get_mut(), config_path);
                 providers::file(f, test_ended_tx.clone(), name, auto_size)?
             }
             ProviderType::Response(r) => {
                 response_providers.insert(name.clone());
-                providers::response(*r, name, auto_size)
+                providers::response(r, name, auto_size)
             }
         };
         providers.insert(name.clone(), provider);
@@ -1172,10 +1171,10 @@ fn get_loggers_from_config(
 ) -> Result<BTreeMap<String, providers::Logger>, TestError> {
     config_loggers
         .into_iter()
-        .map(|(name, mut logger)| {
+        .map(|(name, logger)| {
             //let to = mem::take(&mut logger.to);
             let name2 = name.clone();
-            let writer = match logger.to {
+            let writer = match &logger.to {
                 LogTo::Stdout => stdout.clone(),
                 LogTo::Stderr => stderr.clone(),
                 LogTo::File { path } => {

@@ -8,7 +8,7 @@ use super::{
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Config<VD: Bool = True> {
     pub client: Client<VD>,
     pub general: General,
@@ -26,7 +26,7 @@ impl PropagateVars for Config<False> {
 }
 
 /// Customization Parameters for the HTTP client
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Client<VD: Bool> {
     #[serde(default = "default_timeout")]
     pub request_timeout: Duration,
@@ -53,7 +53,7 @@ impl PropagateVars for Client<False> {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct General {
     #[serde(default = "default_buffer_start_size")]
     pub auto_buffer_start_size: u64,

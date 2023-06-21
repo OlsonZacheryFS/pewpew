@@ -72,11 +72,11 @@ where
     pub fn into_stream<P, Ar, E>(
         self,
         p: &BTreeMap<String, P>,
-    ) -> impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>
+    ) -> impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static
     where
         P: super::scripting::ProviderStream<Ar, Err = E> + 'static,
         Ar: Clone + Send + Unpin + 'static,
-        E: StdError + Clone + Unpin + 'static,
+        E: StdError + Send + Clone + Unpin + 'static,
     {
         match self {
             Self::Literal { value } => Either::A(futures::stream::repeat(Ok((
