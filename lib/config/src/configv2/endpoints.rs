@@ -299,7 +299,8 @@ mod tests {
             }
         );
 
-        let EndPointBody::<False>::File(_, file) = from_yaml("type: file\ncontent: !l body.txt").unwrap() else {
+        // TODO: maybe find a way to not require a single value array here
+        let EndPointBody::<False>::File(_, file) = from_yaml("type: file\ncontent: [!l body.txt]").unwrap() else {
             panic!("was not file variant")
         };
         assert_eq!(
