@@ -83,11 +83,13 @@ impl Endpoints {
         endpoint_tags: BTreeMap<String, String>,
         builder: request::EndpointBuilder,
         provides: BTreeSet<String>,
-        required_providers: config::RequiredProviders,
+        //required_providers: config::RequiredProviders,
+        required_providers: BTreeSet<String>,
     ) {
         let i = self.inner.len();
-        let set = required_providers.unique_providers();
-        self.inner.push((endpoint_tags, builder, set));
+        //let set = required_providers.unique_providers();
+        self.inner
+            .push((endpoint_tags, builder, required_providers));
         for p in provides {
             self.providers.entry(p).or_default().push(i);
         }
@@ -956,7 +958,8 @@ fn create_try_run_future(
 
     // create the endpoints
     for mut endpoint in config.endpoints.into_iter() {
-        let required_providers = mem::take(&mut endpoint.required_providers);
+        //let required_providers = mem::take(&mut endpoint.required_providers);
+        let required_providers = endpoint.get_required_providers();
 
         let provides_set = endpoint
             .provides

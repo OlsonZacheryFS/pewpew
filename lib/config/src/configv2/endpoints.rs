@@ -10,7 +10,7 @@ use super::{
 use derive_more::{Deref, FromStr};
 use serde::Deserialize;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     convert::TryFrom,
     num::NonZeroUsize,
     path::PathBuf,
@@ -70,6 +70,27 @@ impl PropagateVars for Endpoint<False> {
     }
 }
 
+impl Endpoint<True> {
+    pub fn get_required_providers(&self) -> BTreeSet<String> {
+        self.declare
+            .values()
+            .flat_map(|v| v.get_required_providers().into_iter())
+            .chain(
+                self.headers
+                    .iter()
+                    .flat_map(|(_, h)| h.get_required_providers()),
+            )
+            .chain(
+                self.body
+                    .as_ref()
+                    .map_or(BTreeSet::new(), |b| b.get_required_providers())
+                    .into_iter(),
+            )
+            .chain(self.url.get_required_providers().into_iter())
+            .collect()
+    }
+}
+
 impl Endpoint<False> {
     pub fn insert_path(&mut self, path: &PathBuf) {
         if let Some(body) = self.body.as_mut() {
@@ -100,6 +121,24 @@ pub enum EndPointBody<VD: Bool = True> {
     String(Template<String, Regular, VD>),
     File(#[serde(skip)] PathBuf, Template<String, Regular, VD>),
     Multipart(Vec<(String, MultiPartBodySection<VD>)>),
+}
+
+impl EndPointBody<True> {
+    fn get_required_providers(&self) -> BTreeSet<String> {
+        match self {
+            Self::String(t) => t.get_required_providers(),
+            Self::File(_, t) => t.get_required_providers(),
+            Self::Multipart(m) => m
+                .iter()
+                .flat_map(|(_, s)| {
+                    s.headers
+                        .iter()
+                        .flat_map(|(_, h)| h.get_required_providers().into_iter())
+                        .chain(s.body.get_required_providers().into_iter())
+                })
+                .collect(),
+        }
+    }
 }
 
 impl EndPointBody<False> {

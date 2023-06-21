@@ -21,8 +21,13 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Deserialize;
 use std::{
-    borrow::Cow, collections::BTreeMap, convert::TryFrom, error::Error as StdError,
-    iter::FromIterator, str::FromStr, sync::Arc,
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    convert::TryFrom,
+    error::Error as StdError,
+    iter::FromIterator,
+    str::FromStr,
+    sync::Arc,
 };
 use thiserror::Error;
 
@@ -99,6 +104,20 @@ where
         match self {
             Self::Literal { value } => Some(value),
             _ => None,
+        }
+    }
+
+    pub fn get_required_providers(&self) -> BTreeSet<String> {
+        match self {
+            Self::Literal { .. } => BTreeSet::new(),
+            Self::NeedsProviders { script, .. } => script
+                .iter()
+                .filter_map(|p| match p {
+                    TemplatePiece::Provider(p, ..) => Some(p.clone()),
+                    _ => None,
+                })
+                .collect(),
+            _ => unreachable!(),
         }
     }
 }
@@ -207,6 +226,10 @@ impl<T: TemplateType> TemplatedString<T> {
                 (x, y) => Err((x, y)),
             })
             .collect()
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &TemplatePiece<T>> {
+        self.0.iter()
     }
 }
 

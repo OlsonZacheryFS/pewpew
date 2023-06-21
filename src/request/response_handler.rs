@@ -52,10 +52,11 @@ impl ResponseHandler {
             .outgoing
             .iter()
             .enumerate()
-            .map(|(i, o)| {
+            .map(|(i, _)| {
                 if where_clause_special_providers & RESPONSE_BODY == RESPONSE_BODY
                     || where_clause_special_providers & STATS == STATS
-                    || o.select.execute_where(template_values.as_json())?
+                    || true
+                //o.select.execute_where(template_values.as_json())?
                 {
                     handle_response_requirements(
                         rr_providers,
