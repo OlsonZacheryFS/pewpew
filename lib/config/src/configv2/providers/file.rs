@@ -2,7 +2,9 @@ use super::super::templating::{Template, VarsOnly};
 use super::{BufferLimit, ProviderSend};
 use crate::configv2::templating::{Bool, False, True};
 use crate::configv2::PropagateVars;
+use derive_more::Deref;
 use serde::Deserialize;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 pub struct FileProvider<VD: Bool = True> {
@@ -65,22 +67,30 @@ pub enum FileReadFormat {
     Csv(CsvParams),
 }
 
+/// Gets read from the config file as a `char`, but stored as a `u8`.
+#[derive(Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref)]
+#[serde(try_from = "char")]
+pub struct CharByte(u8);
+
+impl TryFrom<char> for CharByte {
+    type Error = std::char::TryFromCharError;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        value.try_into().map(Self)
+    }
+}
+
 #[derive(Debug, Deserialize, PartialEq, Eq, Default, Clone)]
 pub struct CsvParams {
-    // TODO: deserialize u8 from char
-    pub comment: Option<u8>,
-    // TODO: deserialize u8 from char
-    pub delimiter: Option<u8>,
+    pub comment: Option<CharByte>,
+    pub delimiter: Option<CharByte>,
     #[serde(default = "default_double_quote")]
     pub double_quote: bool,
-    // TODO: deserialize u8 from char
-    pub escape: Option<u8>,
+    pub escape: Option<CharByte>,
     #[serde(default)]
     pub headers: CsvHeaders,
-    // TODO: deserialize u8 from char
-    pub terminator: Option<u8>,
-    // TODO: deserialize u8 from char
-    pub quote: Option<u8>,
+    pub terminator: Option<CharByte>,
+    pub quote: Option<CharByte>,
 }
 
 const fn default_double_quote() -> bool {
@@ -154,13 +164,13 @@ mod tests {
         let frf = from_yaml::<FileReadFormat>(
             r##"
 !csv
-  comment: 65
-  delimiter: ;
+  comment: "$"
+  delimiter: ";"
   double_quote: false
-  escape: 10
+  escape: "&"
   headers: true
-  terminator: 55
-  quote: 75
+  terminator: "@"
+  quote: "^"
         "##,
         )
         .unwrap();
@@ -173,13 +183,13 @@ mod tests {
             terminator,
             quote,
         }) = frf else { panic!("was not csv") };
-        assert_eq!(comment, Some(65));
-        assert_eq!(delimiter, None);
+        assert_eq!(comment, Some(CharByte(b'$')));
+        assert_eq!(delimiter, Some(CharByte(b';')));
         assert_eq!(double_quote, false);
-        assert_eq!(escape, Some(10));
+        assert_eq!(escape, Some(CharByte(b'&')));
         assert_eq!(headers, CsvHeaders::Use(true));
-        assert_eq!(terminator, Some(55));
-        assert_eq!(quote, Some(75));
+        assert_eq!(terminator, Some(CharByte(b'@')));
+        assert_eq!(quote, Some(CharByte(b'^')));
 
         // array headers
         let frf = from_yaml(

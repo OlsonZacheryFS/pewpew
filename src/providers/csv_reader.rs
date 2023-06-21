@@ -29,9 +29,11 @@ impl CsvReader {
     ) -> Result<Self, io::Error> {
         let file = File::open(file)?;
         let mut builder = csv::ReaderBuilder::new();
-        builder.comment(csv.comment).escape(csv.escape);
+        builder
+            .comment(csv.comment.as_deref().copied())
+            .escape(csv.escape.as_deref().copied());
         if let Some(delimiter) = csv.delimiter {
-            builder.delimiter(delimiter);
+            builder.delimiter(*delimiter);
         }
         let (first_row_headers, explicit_headers) = match &csv.headers {
             configv2::providers::CsvHeaders::Use(b) => {
@@ -42,10 +44,10 @@ impl CsvReader {
         };
         builder.double_quote(csv.double_quote);
         if let Some(quote) = csv.quote {
-            builder.quote(quote);
+            builder.quote(*quote);
         }
         if let Some(terminator) = csv.terminator {
-            builder.terminator(csv::Terminator::Any(terminator));
+            builder.terminator(csv::Terminator::Any(*terminator));
         }
         let mut reader = builder.from_reader(file);
         let headers = explicit_headers
