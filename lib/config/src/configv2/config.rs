@@ -116,12 +116,13 @@ keepalive: 19s
         } = from_yaml(TEST2).unwrap();
         assert_eq!(request_timeout, Duration::from_secs(23));
         assert_eq!(headers.len(), 1);
-        /*assert_eq!(
-            headers["one"],
+        assert_eq!(headers[0].0, "one");
+        assert_eq!(
+            headers[0].1,
             Template::Literal {
                 value: "two".to_owned()
             }
-        );*/
+        );
         assert_eq!(keepalive, Duration::from_secs(19));
     }
 

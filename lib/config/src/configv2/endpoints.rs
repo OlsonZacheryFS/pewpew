@@ -120,7 +120,7 @@ pub enum EndPointBody<VD: Bool = True> {
     #[serde(rename = "str")]
     String(Template<String, Regular, VD>),
     File(#[serde(skip)] PathBuf, Template<String, Regular, VD>),
-    Multipart(Vec<(String, MultiPartBodySection<VD>)>),
+    Multipart(#[serde(with = "tuple_vec_map")] Vec<(String, MultiPartBodySection<VD>)>),
 }
 
 impl EndPointBody<True> {
@@ -310,8 +310,7 @@ mod tests {
             }
         );
 
-        /*
-                static TEST: &str = r#"
+        static TEST: &str = r#"
         type: multipart
         content:
           foo:
@@ -319,43 +318,44 @@ mod tests {
               Content-Type: !l image/jpeg
             body:
               type: file
-              content: !l foo.jpg
+              content: [!l foo.jpg]
           bar:
             body:
               type: str
               content: !l some text"#;
-                let EndPointBody::<False>::Multipart(multipart) = from_yaml(TEST).unwrap() else {
+        let EndPointBody::<False>::Multipart(multipart) = from_yaml(TEST).unwrap() else {
                     panic!("was not multipart variant")
                 };
-                assert_eq!(multipart.len(), 2);
-                assert_eq!(
-                    multipart["foo"],
-                    MultiPartBodySection {
-                        headers: [(
-                            "Content-Type".to_owned(),
-                            Template::Literal {
-                                value: "image/jpeg".to_owned()
-                            }
-                        )]
-                        .into(),
-                        body: EndPointBody::File(
-                            Default::default(),
-                            Template::Literal {
-                                value: "foo.jpg".to_owned()
-                            }
-                        )
+        assert_eq!(multipart.len(), 2);
+        assert_eq!(multipart[0].0, "foo");
+        assert_eq!(
+            multipart[0].1,
+            MultiPartBodySection {
+                headers: vec![(
+                    "Content-Type".to_owned(),
+                    Template::Literal {
+                        value: "image/jpeg".to_owned()
                     }
-                );
-                assert_eq!(
-                    multipart["bar"],
-                    MultiPartBodySection {
-                        headers: Default::default(),
-                        body: EndPointBody::String(Template::Literal {
-                            value: "some text".to_owned()
-                        })
+                )]
+                .into(),
+                body: EndPointBody::File(
+                    Default::default(),
+                    Template::Literal {
+                        value: "foo.jpg".to_owned()
                     }
-                );
-                */
+                )
+            }
+        );
+        assert_eq!(multipart[1].0, "bar");
+        assert_eq!(
+            multipart[1].1,
+            MultiPartBodySection {
+                headers: Default::default(),
+                body: EndPointBody::String(Template::Literal {
+                    value: "some text".to_owned()
+                })
+            }
+        );
     }
 
     #[test]

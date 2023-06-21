@@ -2,11 +2,11 @@ use super::{
     templating::{Bool, False, Regular, Template, True},
     PropagateVars,
 };
-use derive_more::Deref;
+use derive_more::{Deref, From};
 use serde::Deserialize;
 use std::{convert::TryFrom, str::FromStr, time::Duration as SDur};
 
-#[derive(Debug, Deserialize, Clone, Deref, PartialEq, Eq, Default)]
+#[derive(Debug, Deserialize, Clone, Deref, PartialEq, Eq, From)]
 pub struct Headers<VD: Bool>(
     #[serde(with = "tuple_vec_map")]
     #[serde(default = "Vec::new")]
@@ -16,6 +16,12 @@ pub struct Headers<VD: Bool>(
 impl<VD: Bool> Headers<VD> {
     pub fn new() -> Self {
         Self(Vec::new())
+    }
+}
+
+impl<VD: Bool> Default for Headers<VD> {
+    fn default() -> Self {
+        Self(vec![])
     }
 }
 
