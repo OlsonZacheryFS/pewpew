@@ -1,11 +1,11 @@
-use crate::configv2::templating::TemplatePiece;
-
 use super::templating::{Template, TemplateType, True, OK};
+use crate::configv2::templating::TemplatePiece;
 use boa_engine::{
     object::{JsFunction, ObjectInitializer},
     prelude::*,
     property::Attribute,
 };
+use diplomatic_bag::DiplomaticBag;
 use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
 use std::{
@@ -25,7 +25,7 @@ pub trait ProviderStream<Ar: Clone + Send + Unpin + 'static> {
 }
 
 pub struct EvalExpr {
-    ctx: sync::SendContext,
+    ctx: DiplomaticBag<(Context, JsFunction)>,
     needed: Vec<String>,
 }
 
@@ -66,13 +66,21 @@ impl EvalExpr {
             );
         }
         Ok(Self {
-            ctx: sync::SendContext::new(script),
+            ctx: DiplomaticBag::new(move |_| {
+                let mut ctx = builtins::get_default_context();
+                ctx.eval(script).expect("TODO");
+                let efn = JsFunction::from_object(
+                    ctx.eval("____eval").unwrap().as_object().unwrap().clone(),
+                )
+                .unwrap();
+                (ctx, efn)
+            }),
             needed,
         })
     }
 
     pub fn into_stream<P, Ar, E>(
-        mut self,
+        self,
         providers: &BTreeMap<String, P>,
     ) -> Result<impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send, IntoStreamError>
     where
@@ -80,7 +88,8 @@ impl EvalExpr {
         Ar: Clone + Send + Unpin + 'static,
         E: Unpin + std::error::Error,
     {
-        let providers = std::mem::take(&mut self.needed)
+        let Self { mut ctx, needed } = self;
+        let providers = needed
             .into_iter()
             .map(|pn| {
                 providers
@@ -90,83 +99,35 @@ impl EvalExpr {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         Ok(zip_all_map(providers, true).map_ok(move |values| {
-            // Safety
-            // Since the SendContext is wholly owned by this closure, and nothing is moved out,
-            // then there should be no issues.
-            let mut ctx = unsafe { self.ctx.ctx_mut() };
-            let ctx = &mut *ctx;
-
-            let values: BTreeMap<_, _> = values
-                .into_iter()
-                .map(|(n, (v, ar))| {
-                    JsValue::from_json(&v, ctx)
-                        .map_err(EvalExprError::InvalidJsonFromProvider)
-                        .map(|v| (n, (v, ar)))
-                })
-                .collect::<Result<_, _>>()
-                .unwrap();
-            let mut object = ObjectInitializer::new(ctx);
-            for (name, (value, _)) in values.iter() {
-                object.property(name.as_str(), value, Attribute::READONLY);
-            }
-            let object = object.build();
-            (
-                unsafe { self.ctx.efn() }
-                    .call(&JsValue::Null, &[object.into()], ctx)
-                    .unwrap()
-                    .to_json(ctx)
-                    .unwrap(),
-                values.into_iter().flat_map(|v| v.1 .1).collect_vec(),
-            )
+            // TODO: much better error handling
+            // This is escpecially important when working with DiplomaticBag, as a single panic
+            // will corrupt the shared worker thread.
+            ctx.as_mut().and_then(|_, (ctx, efn)| {
+                let efn = &*efn;
+                let values: BTreeMap<_, _> = values
+                    .into_iter()
+                    .map(|(n, (v, ar))| {
+                        JsValue::from_json(&v, ctx)
+                            .map_err(EvalExprError::InvalidJsonFromProvider)
+                            .map(|v| (n, (v, ar)))
+                    })
+                    .collect::<Result<_, _>>()
+                    .unwrap();
+                let mut object = ObjectInitializer::new(ctx);
+                for (name, (value, _)) in values.iter() {
+                    object.property(name.as_str(), value, Attribute::READONLY);
+                }
+                let object = object.build();
+                (
+                    efn.call(&JsValue::Null, &[object.into()], ctx)
+                        .unwrap()
+                        .to_json(ctx)
+                        .unwrap(),
+                    values.into_iter().flat_map(|v| v.1 .1).collect_vec(),
+                )
+            })
         }))
     }
-}
-
-mod sync {
-    //! # Safety
-    //! The boa engine docs state that Contexts created in the same thread can share objects, which
-    //! is presumably the primary reason that `Send` is not implemented. Here, a separate thread is
-    //! created to do nothing but create the needed non-Send types, which should mean that any
-    //! non-Send internals are exclusive to this instance, meaning that Sending is Ok.
-    //!
-    //! As long as Clone is not implemented for `SendContext`, and there aren't any hidden details
-    //! that complicate things, safety should be upheld for the impl of Send for this type
-
-    use super::*;
-    use std::cell::RefMut;
-
-    pub struct SendContext(RefCell<Context>, JsFunction);
-
-    impl SendContext {
-        pub fn new(src: String) -> Self {
-            std::thread::spawn(move || Self::new_inner(src))
-                .join()
-                .unwrap()
-        }
-
-        fn new_inner(src: String) -> Self {
-            let mut ctx = builtins::get_default_context();
-            ctx.eval(src).expect("TODO");
-            let efn =
-                JsFunction::from_object(ctx.eval("____eval").unwrap().as_object().unwrap().clone())
-                    .unwrap();
-            Self(RefCell::new(ctx), efn)
-        }
-
-        /// # Safety
-        /// Don't Clone the Context, or Send this struct while the Ref is active.
-        pub unsafe fn ctx_mut(&self) -> RefMut<Context> {
-            self.0.borrow_mut()
-        }
-
-        /// # Safety
-        /// Don't Clone the JsFunction
-        pub unsafe fn efn(&self) -> &JsFunction {
-            &self.1
-        }
-    }
-
-    unsafe impl Send for SendContext {}
 }
 
 #[derive(Debug, Error)]

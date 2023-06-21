@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn test_logger_defaults() {
         let logger = from_yaml::<Logger<False>>("to:\n  type: stdout").unwrap();
-        assert_eq!(logger.query, None);
+        assert!(logger.query.is_none());
         assert_eq!(logger.pretty, false);
         assert_eq!(logger.limit, None);
         assert_eq!(logger.kill, false);

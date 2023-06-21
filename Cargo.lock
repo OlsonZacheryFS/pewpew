@@ -339,6 +339,7 @@ dependencies = [
  "boa_engine",
  "derivative",
  "derive_more",
+ "diplomatic-bag",
  "ether",
  "futures",
  "gc",
@@ -580,6 +581,16 @@ checksum = "8168378f4e5023e7218c89c891c0fd8ecdb5e5e4f18cb78f38cf245dd021e76f"
 dependencies = [
  "block-buffer",
  "crypto-common",
+]
+
+[[package]]
+name = "diplomatic-bag"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6865d98daf3118a9a6cc4a75e273967c848713757d9199bb8df3945bda6f05"
+dependencies = [
+ "crossbeam-channel",
+ "once_cell",
 ]
 
 [[package]]

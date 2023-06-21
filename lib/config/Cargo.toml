@@ -13,6 +13,7 @@ base64 = "0.21"
 boa_engine = "0.16.0"
 derivative = "2.2.0"
 derive_more = "0.99.17"
+diplomatic-bag = "0.3.1"
 ether = { path = "../either" }
 futures = "0.3"
 gc = "0.4.1"
