@@ -14,7 +14,7 @@
 use super::PropagateVars;
 use derivative::Derivative;
 use ether::Either;
-use futures::{Stream, TryStreamExt};
+use futures::Stream;
 pub use helpers::*;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -27,7 +27,6 @@ use std::{
     error::Error as StdError,
     iter::FromIterator,
     str::FromStr,
-    sync::Arc,
 };
 use thiserror::Error;
 

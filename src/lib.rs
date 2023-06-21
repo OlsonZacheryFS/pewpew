@@ -43,7 +43,6 @@ use yansi::Paint;
 
 use std::str::FromStr;
 use std::{
-    borrow::Cow,
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     convert::TryFrom,

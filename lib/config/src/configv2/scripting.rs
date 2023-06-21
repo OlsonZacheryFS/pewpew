@@ -8,10 +8,7 @@ use boa_engine::{
 use diplomatic_bag::DiplomaticBag;
 use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
-use std::{
-    cell::{OnceCell, RefCell},
-    collections::BTreeMap,
-};
+use std::{cell::OnceCell, collections::BTreeMap};
 use thiserror::Error;
 use zip_all::zip_all_map;
 

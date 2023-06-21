@@ -10,7 +10,7 @@ use super::{
 use derive_more::{Deref, FromStr};
 use serde::Deserialize;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     convert::TryFrom,
     num::NonZeroUsize,
     path::PathBuf,
@@ -402,11 +402,12 @@ mod tests {
             tags,
             url,
             provides,
-            on_demand,
+            //on_demand,
             logs,
             max_parallel_requests,
             no_auto_returns,
             request_timeout,
+            ..
         } = from_yaml(TEST).unwrap();
         assert!(declare.is_empty());
         assert!(headers.is_empty());

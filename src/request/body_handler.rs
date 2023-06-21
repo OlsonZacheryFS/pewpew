@@ -14,7 +14,6 @@ use log::debug;
 use serde_json as json;
 
 use std::{
-    borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     future::Future,
     sync::Arc,

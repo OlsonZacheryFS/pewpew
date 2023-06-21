@@ -6,7 +6,6 @@ use super::{
     PropagateVars,
 };
 use serde::Deserialize;
-use std::collections::BTreeMap;
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Config<VD: Bool = True> {
