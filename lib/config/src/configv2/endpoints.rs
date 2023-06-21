@@ -23,16 +23,16 @@ pub struct Endpoint<VD: Bool = True> {
     #[serde(default = "BTreeMap::new")]
     pub declare: BTreeMap<String, Template<String, Regular, VD>>,
     #[serde(default = "Vec::new")]
-    headers: Headers<VD>,
-    body: Option<EndPointBody<VD>>,
+    pub headers: Headers<VD>,
+    pub body: Option<EndPointBody<VD>>,
     #[serde(bound = "LoadPattern<VD>: serde::de::DeserializeOwned")]
     pub load_pattern: Option<LoadPattern<VD>>,
     #[serde(default)]
-    method: Method,
+    pub method: Method,
     pub peak_load: Option<Template<HitsPerMinute, VarsOnly, VD>>,
     #[serde(default = "BTreeMap::new")]
     pub tags: BTreeMap<String, Template<String, VarsOnly, VD>>,
-    url: Template<String, Regular, VD>,
+    pub url: Template<String, Regular, VD>,
     #[serde(default)]
     pub provides: BTreeMap<String, EndpointProvides>,
     // book says optional, check what the behavior should be and if this
@@ -40,11 +40,11 @@ pub struct Endpoint<VD: Bool = True> {
     #[serde(default)]
     pub on_demand: bool,
     #[serde(default)]
-    logs: BTreeMap<String, EndpointLogs>,
-    max_parallel_requests: Option<NonZeroUsize>,
+    pub logs: BTreeMap<String, EndpointLogs>,
+    pub max_parallel_requests: Option<NonZeroUsize>,
     #[serde(default)]
-    no_auto_returns: bool,
-    request_timeout: Option<Duration>,
+    pub no_auto_returns: bool,
+    pub request_timeout: Option<Duration>,
 }
 
 impl PropagateVars for Endpoint<False> {
@@ -243,7 +243,7 @@ impl From<EndpointProvides> for (Query, ProviderSend) {
 
 #[derive(Debug, Deserialize)]
 #[serde(transparent)]
-struct EndpointLogs {
+pub struct EndpointLogs {
     query: Query,
 }
 

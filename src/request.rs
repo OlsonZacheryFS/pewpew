@@ -189,7 +189,7 @@ impl Outgoing {
 
 #[derive(Debug, Clone, Copy, Error)]
 #[error("Temp")]
-struct TempError;
+pub struct TempError;
 
 impl ProviderStream<AutoReturn> for providers::Provider {
     type Err = TempError;

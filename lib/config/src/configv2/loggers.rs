@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Logger<VD: Bool = True> {
-    query: Option<super::query::Query>,
+    pub query: Option<super::query::Query>,
     pub to: LogTo<VD>,
     #[serde(default)]
     pub pretty: bool,
