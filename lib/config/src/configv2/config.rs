@@ -30,7 +30,7 @@ impl PropagateVars for Config<False> {
 pub struct Client<VD: Bool> {
     #[serde(default = "default_timeout")]
     pub request_timeout: Duration,
-    #[serde(default = "Vec::new")]
+    #[serde(default = "Headers::new")]
     headers: Headers<VD>,
     #[serde(default = "default_keepalive")]
     pub keepalive: Duration,

@@ -33,6 +33,7 @@ use thiserror::Error;
 
 #[derive(Deserialize, PartialEq, Eq, Clone, Derivative)]
 #[derivative(Debug)]
+#[serde(bound = "V: serde::de::DeserializeOwned")]
 #[serde(try_from = "TemplateTmp<V, T>")]
 pub enum Template<
     V: FromStr,
@@ -357,6 +358,7 @@ pub enum TemplatePiece<T: TemplateType> {
 /// Temporary Template type that allows all variants to exist, but can fail in conversion into the
 /// main Template based on the marker type of `T`.
 #[derive(Debug, Deserialize, Clone)]
+#[serde(bound = "V: serde::de::DeserializeOwned")]
 enum TemplateTmp<V, T: TemplateType> {
     #[serde(rename = "l")]
     Literal(V),

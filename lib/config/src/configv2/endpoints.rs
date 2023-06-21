@@ -22,7 +22,7 @@ use thiserror::Error;
 pub struct Endpoint<VD: Bool = True> {
     #[serde(default = "BTreeMap::new")]
     pub declare: BTreeMap<String, Template<String, Regular, VD>>,
-    #[serde(default = "Vec::new")]
+    #[serde(default = "Headers::new")]
     pub headers: Headers<VD>,
     pub body: Option<EndPointBody<VD>>,
     #[serde(bound = "LoadPattern<VD>: serde::de::DeserializeOwned")]
@@ -166,7 +166,7 @@ impl PropagateVars for EndPointBody<False> {
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 pub struct MultiPartBodySection<VD: Bool = True> {
-    #[serde(default = "Vec::new")]
+    #[serde(default = "Headers::new")]
     pub headers: Headers<VD>,
     pub body: EndPointBody<VD>,
 }

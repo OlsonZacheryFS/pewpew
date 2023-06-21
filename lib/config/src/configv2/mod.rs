@@ -20,6 +20,7 @@ pub mod templating;
 
 pub mod common;
 
+pub use common::Headers;
 pub use config::{Config, General};
 pub use endpoints::{EndPointBody, Endpoint};
 pub use loggers::Logger;

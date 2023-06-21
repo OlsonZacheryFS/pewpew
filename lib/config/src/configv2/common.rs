@@ -1,9 +1,35 @@
-use super::templating::{Regular, Template};
+use super::{
+    templating::{Bool, False, Regular, Template, True},
+    PropagateVars,
+};
 use derive_more::Deref;
 use serde::Deserialize;
 use std::{convert::TryFrom, str::FromStr, time::Duration as SDur};
 
-pub type Headers<VD> = Vec<(String, Template<String, Regular, VD>)>;
+#[derive(Debug, Deserialize, Clone, Deref, PartialEq, Eq, Default)]
+pub struct Headers<VD: Bool>(
+    #[serde(with = "tuple_vec_map")]
+    #[serde(default = "Vec::new")]
+    Vec<(String, Template<String, Regular, VD>)>,
+);
+
+impl<VD: Bool> Headers<VD> {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl PropagateVars for Headers<False> {
+    type Residual = Headers<True>;
+
+    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
+        self.0
+            .into_iter()
+            .map(|(n, h)| Ok((n, h.insert_vars(vars)?)))
+            .collect::<Result<_, _>>()
+            .map(Headers)
+    }
+}
 
 /// Newtype wrapper around [`std::time::Duration`] that allows implementing the needed traits.
 #[derive(Debug, Deserialize, PartialEq, Clone, Copy, Eq, Deref)]
