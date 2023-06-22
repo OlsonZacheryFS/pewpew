@@ -328,21 +328,13 @@ impl EndpointBuilder {
                 ProviderOrLogger::Logger(tx.clone()),
             ));
         }
-        // Required providers
-        // these u16s are bitwise maps of what standard select request/response/stats are selected
-        let rr_providers = u16::MAX; // providers_to_stream.get_special();
-        let precheck_rr_providers = u16::MAX; // providers_to_stream.get_where_special();
-                                              // go through the list of required providers and make sure we have them all
 
-        // TODO: try actually using the providers the endpoint needs.
-        for name in providers_to_stream
-        /*.unique_providers()*/
-        {
+        for name in providers_to_stream {
             let provider = match ctx.providers.get(&name) {
                 Some(p) => p,
                 None => continue,
             };
-            //debug!("EndpointBuilder.build unique_providers name=\"{}\"", name);
+            debug!("EndpointBuilder.build unique_providers name=\"{}\"", name);
             let receiver = provider.rx.clone();
             let ar = provider
                 .auto_return
@@ -388,9 +380,7 @@ impl EndpointBuilder {
             no_auto_returns,
             on_demand_streams,
             outgoing, // loggers
-            precheck_rr_providers,
             provides, // providers
-            rr_providers,
             tags: Arc::new(tags),
             stats_tx,
             stream_collection: streams,
@@ -411,7 +401,6 @@ fn multipart_body_as_hyper_body(
     multipart_body: &Vec<(String, MultiPartBodySection)>,
     template_values: &TemplateValues,
     content_type_entry: HeaderEntry<'_, HeaderValue>,
-    copy_body_value: bool,
     body_value: &mut Option<String>,
 ) -> Result<impl Future<Output = Result<(u64, HyperBody), TestError>>, TestError> {
     let boundary: String = Alphanumeric
@@ -507,12 +496,10 @@ fn multipart_body_as_hyper_body(
             Ok::<_, TestError>(match path {
                 // not a map_or_else() as both paths need to mutably borrow the same data
                 Some(path) => {
-                    if copy_body_value {
-                        body_value2.extend_from_slice(&piece_data);
-                        body_value2.extend_from_slice(b"<<contents of file: ");
-                        body_value2.extend_from_slice(body.as_bytes());
-                        body_value2.extend_from_slice(b">>");
-                    }
+                    body_value2.extend_from_slice(&piece_data);
+                    body_value2.extend_from_slice(b"<<contents of file: ");
+                    body_value2.extend_from_slice(body.as_bytes());
+                    body_value2.extend_from_slice(b">>");
                     let piece_data_bytes = piece_data.len() as u64;
                     let piece_stream = future::ok(Bytes::from(piece_data)).into_stream();
                     tweak_path(&mut body, &path);
@@ -524,9 +511,7 @@ fn multipart_body_as_hyper_body(
                 }
                 None => {
                     piece_data.extend_from_slice(body.as_bytes());
-                    if copy_body_value {
-                        body_value2.extend_from_slice(&piece_data);
-                    }
+                    body_value2.extend_from_slice(&piece_data);
                     let piece_data_bytes = piece_data.len() as u64;
                     let piece_stream = future::ok(Bytes::from(piece_data)).into_stream().b();
                     let b = future::ok((piece_data_bytes, piece_stream));
@@ -536,14 +521,12 @@ fn multipart_body_as_hyper_body(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    if copy_body_value {
-        body_value2.extend_from_slice(&closing_boundary);
-        let bv = match String::from_utf8(body_value2) {
-            Ok(bv) => bv,
-            Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
-        };
-        *body_value = Some(bv);
-    }
+    body_value2.extend_from_slice(&closing_boundary);
+    let bv = match String::from_utf8(body_value2) {
+        Ok(bv) => bv,
+        Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+    };
+    *body_value = Some(bv);
 
     let ret = try_join_all(pieces).map_ok(move |results| {
         let mut bytes = closing_boundary.len() as u64;
@@ -596,20 +579,14 @@ async fn create_file_hyper_body(filename: String) -> Result<(u64, HyperBody), Te
 fn body_template_as_hyper_body(
     body_template: &Option<EndPointBody>,
     template_values: &TemplateValues,
-    copy_body_value: bool,
     body_value: &mut Option<String>,
     content_type_entry: HeaderEntry<'_, HeaderValue>,
 ) -> impl Future<Output = Result<(u64, HyperBody), TestError>> {
     let template = match body_template.as_ref() {
         Some(EndPointBody::File(_, t)) => t,
         Some(EndPointBody::Multipart(m)) => {
-            let r = multipart_body_as_hyper_body(
-                m,
-                template_values,
-                content_type_entry,
-                copy_body_value,
-                body_value,
-            );
+            let r =
+                multipart_body_as_hyper_body(m, template_values, content_type_entry, body_value);
             return Either3::A(future::ready(r).and_then(|x| x));
         }
         Some(EndPointBody::String(t)) => t,
@@ -621,14 +598,10 @@ fn body_template_as_hyper_body(
     };
     if let Some(EndPointBody::File(path, _)) = body_template {
         tweak_path(&mut body, path);
-        if copy_body_value {
-            *body_value = Some(format!("<<contents of file: {body}>>"));
-        }
+        *body_value = Some(format!("<<contents of file: {body}>>"));
         Either3::C(create_file_hyper_body(body))
     } else {
-        if copy_body_value {
-            *body_value = Some(body.clone());
-        }
+        *body_value = Some(body.clone());
         Either3::B(future::ok((body.as_bytes().len() as u64, body.into())))
     }
 }
@@ -649,9 +622,7 @@ pub struct Endpoint {
     no_auto_returns: bool,
     on_demand_streams: OnDemandStreams,
     outgoing: Vec<Outgoing>,
-    precheck_rr_providers: u16,
     provides: Vec<Outgoing>,
-    rr_providers: u16,
     tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
     stats_tx: StatsTx,
     stream_collection: StreamCollection,
@@ -684,7 +655,6 @@ impl Endpoint {
         let method = self.method;
         let headers = self.headers;
         let body = self.body;
-        let rr_providers = self.rr_providers;
         let client = self.client;
         let stats_tx = self.stats_tx;
         let no_auto_returns = self.no_auto_returns;
@@ -715,7 +685,6 @@ impl Endpoint {
         let mut outgoing = self.outgoing;
         outgoing.extend(self.provides);
         let outgoing = Arc::new(outgoing);
-        let precheck_rr_providers = self.precheck_rr_providers;
         let timeout = self.timeout;
         let max_parallel_requests = self.max_parallel_requests;
         let tags = self.tags;
@@ -735,12 +704,10 @@ impl Endpoint {
             method,
             headers,
             body,
-            rr_providers,
             client,
             stats_tx,
             no_auto_returns,
             outgoing,
-            precheck_rr_providers,
             tags,
             timeout,
         };
