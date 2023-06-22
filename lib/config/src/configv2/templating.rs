@@ -30,6 +30,8 @@ use std::{
 };
 use thiserror::Error;
 
+mod parser;
+
 #[derive(Deserialize, PartialEq, Eq, Clone, Derivative)]
 #[derivative(Debug)]
 #[serde(bound = "V: serde::de::DeserializeOwned")]
