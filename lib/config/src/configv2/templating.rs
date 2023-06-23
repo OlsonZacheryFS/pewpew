@@ -324,9 +324,9 @@ impl<T: TemplateType> FromStr for TemplatedString<T> {
 
             let r#type = |x: String| -> Result<TemplatePiece<T>, &'static str> {
                 Ok(match caps.get(1).map(|c| c.as_str()).unwrap_or("") {
-                    "v" => TemplatePiece::Var(x, T::VarsAllowed::try_default()?),
-                    "p" => TemplatePiece::Provider(x, T::ProvAllowed::try_default()?),
-                    "e" => TemplatePiece::Env(x, T::EnvsAllowed::try_default()?),
+                    "v" => TemplatePiece::Var(x, T::VarsAllowed::try_default().unwrap()),
+                    "p" => TemplatePiece::Provider(x, T::ProvAllowed::try_default().unwrap()),
+                    "e" => TemplatePiece::Env(x, T::EnvsAllowed::try_default().unwrap()),
                     _ => unreachable!(),
                 })
             };
@@ -391,8 +391,7 @@ where
             TemplateTmp::Literal(x) => Self::Literal { value: x },
             TemplateTmp::Env(template) => Self::Env {
                 template,
-                __dontuse: TryDefault::try_default()
-                    .map_err(|_| TemplateError::InvalidTypeTag("e"))?,
+                __dontuse: TryDefault::try_default().ok_or(TemplateError::InvalidTypeTag("e"))?,
             },
             TemplateTmp::Vars(template) => Self::PreVars {
                 template,
@@ -406,8 +405,7 @@ where
                         })
                         .map(|v| Template::Literal { value: v })
                 },
-                __dontuse: TryDefault::try_default()
-                    .map_err(|_| TemplateError::InvalidTypeTag("v"))?,
+                __dontuse: TryDefault::try_default().ok_or(TemplateError::InvalidTypeTag("v"))?,
             },
             TemplateTmp::Script(template) => Self::PreVars {
                 template,
@@ -417,8 +415,7 @@ where
                         __dontuse: TryDefault::try_default().unwrap(),
                     })
                 },
-                __dontuse: TryDefault::try_default()
-                    .map_err(|_| TemplateError::InvalidTypeTag("s"))?,
+                __dontuse: TryDefault::try_default().ok_or(TemplateError::InvalidTypeTag("s"))?,
             },
         })
     }
@@ -429,8 +426,8 @@ where
     T: TryDefault,
     U: TryDefault,
 {
-    fn try_default() -> Result<Self, &'static str> {
-        Ok((T::try_default()?, U::try_default()?))
+    fn try_default() -> Option<Self> {
+        Some((T::try_default()?, U::try_default()?))
     }
 }
 
@@ -440,8 +437,8 @@ where
     U: TryDefault,
     V: TryDefault,
 {
-    fn try_default() -> Result<Self, &'static str> {
-        Ok((T::try_default()?, U::try_default()?, V::try_default()?))
+    fn try_default() -> Option<Self> {
+        Some((T::try_default()?, U::try_default()?, V::try_default()?))
     }
 }
 
@@ -557,18 +554,18 @@ mod helpers {
     /// `False::try_default()` will be called, and an error will be forwarded and Deserialize will
     /// fail.
     pub trait TryDefault: Sized + fmt::Debug + private::Seal {
-        fn try_default() -> Result<Self, &'static str>;
+        fn try_default() -> Option<Self>;
     }
 
     impl TryDefault for True {
-        fn try_default() -> Result<Self, &'static str> {
-            Ok(Self)
+        fn try_default() -> Option<Self> {
+            Some(Self)
         }
     }
 
     impl TryDefault for False {
-        fn try_default() -> Result<Self, &'static str> {
-            Err("uninhabited type")
+        fn try_default() -> Option<Self> {
+            None
         }
     }
 
