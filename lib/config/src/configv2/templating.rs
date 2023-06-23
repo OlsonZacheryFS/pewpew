@@ -11,7 +11,7 @@
 //! For example: `Template<_, EnvsOnly>` cannot be instantiated in the PreVars variant, because the
 //! associated type is False.
 
-use super::PropagateVars;
+use super::{scripting::EvalExpr, PropagateVars};
 use derivative::Derivative;
 use ether::Either;
 use futures::Stream;
@@ -25,6 +25,7 @@ use std::{
     error::Error as StdError,
     iter::FromIterator,
     str::FromStr,
+    sync::{Arc, Mutex},
 };
 use thiserror::Error;
 
@@ -61,11 +62,25 @@ pub enum Template<
         __dontuse: (T::VarsAllowed, VD::Inverse),
     },
     NeedsProviders {
-        script: TemplatedString<T>,
+        script: Vec<ExprSegment>,
         #[derivative(Debug = "ignore")]
         __dontuse: (ED, VD, T::ProvAllowed),
     },
 }
+
+#[derive(Debug, Clone)]
+pub enum ExprSegment {
+    Str(String),
+    Eval(Arc<Mutex<EvalExpr>>),
+}
+
+impl PartialEq for ExprSegment {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+    }
+}
+
+impl Eq for ExprSegment {}
 
 #[derive(Debug, Error)]
 pub enum TemplateGenError<V: FromStr>
@@ -102,10 +117,23 @@ where
                         template,
                         next: if T::ProvAllowed::VALUE {
                             |s| {
-                                Ok(Template::NeedsProviders {
-                                    script: s,
-                                    __dontuse: TryDefault::try_default().unwrap(),
-                                })
+                                let s = s.collapse();
+                                match s.clone().try_collect() {
+                                    None => Ok(Template::NeedsProviders {
+                                        script: s.into_script(),
+                                        __dontuse: TryDefault::try_default().unwrap(),
+                                    }),
+                                    Some(s) => s
+                                        .parse()
+                                        .map_err(|e: <V as FromStr>::Err| {
+                                            super::VarsError::InvalidString {
+                                                typename: std::any::type_name::<V>(),
+                                                from: s,
+                                                error: e.into(),
+                                            }
+                                        })
+                                        .map(|v| Template::Literal { value: v }),
+                                }
                             }
                         } else {
                             |s| {
@@ -177,10 +205,12 @@ where
             Self::Literal { .. } => BTreeSet::new(),
             Self::NeedsProviders { script, .. } => script
                 .iter()
-                .filter_map(|p| match p {
-                    Segment::Prov(p, ..) => Some(p.clone()),
-                    _ => None,
-                })
+                .filter_map(
+                    |p| todo!(), /*match p {
+                                     Segment::Prov(p, ..) => Some(p.clone()),
+                                     _ => None,
+                                 }*/
+                )
                 .collect(),
             _ => unreachable!(),
         }
@@ -307,6 +337,10 @@ impl<T: TemplateType> TemplatedString<T> {
 
     fn iter(&self) -> impl Iterator<Item = &parser::Segment<T>> {
         self.0.iter()
+    }
+
+    fn into_script(self) -> Vec<ExprSegment> {
+        todo!()
     }
 }
 
@@ -493,7 +527,7 @@ mod helpers {
 
     /// Trait for types of templatings allowed. It's not an enumeration of variants, because
     /// Template needs to be generic over a type of this trait.
-    pub trait TemplateType: fmt::Debug + private::Seal + PartialEq + Eq {
+    pub trait TemplateType: fmt::Debug + private::Seal + PartialEq + Eq + Clone + Copy {
         type EnvsAllowed: Bool;
         type VarsAllowed: Bool;
         type ProvAllowed: Bool;

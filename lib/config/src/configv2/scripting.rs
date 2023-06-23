@@ -4,6 +4,7 @@ use boa_engine::{
     prelude::*,
     property::Attribute,
 };
+use derivative::Derivative;
 use diplomatic_bag::DiplomaticBag;
 use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
@@ -20,7 +21,10 @@ pub trait ProviderStream<Ar: Clone + Send + Unpin + 'static> {
     fn as_stream(&self) -> ProviderStreamStream<Ar, Self::Err>;
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct EvalExpr {
+    #[derivative(Debug = "ignore")]
     ctx: DiplomaticBag<(Context, JsFunction)>,
     needed: Vec<String>,
 }
