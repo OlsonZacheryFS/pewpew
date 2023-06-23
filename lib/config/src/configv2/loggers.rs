@@ -99,9 +99,7 @@ mod tests {
         assert_eq!(to, LogTo::Stdout);
         let to = from_yaml::<LogTo<False>>("type: stderr").unwrap();
         assert_eq!(to, LogTo::Stderr);
-        // Error("path: untagged and internally tagged enums do not support enum input")
-        //let to = from_yaml::<LogTo>("type: file\npath: !l out.txt).unwrap();
-        let to = from_yaml::<LogTo<False>>("type: file\npath: {\"l\": \"out.txt\"}").unwrap();
+        let to = from_yaml::<LogTo<False>>("type: file\npath: out.txt").unwrap();
         assert_eq!(
             to,
             LogTo::File {

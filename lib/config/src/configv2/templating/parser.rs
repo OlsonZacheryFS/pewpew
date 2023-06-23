@@ -29,10 +29,10 @@ impl<'a> From<NomError<&'a str>> for TemplateParseError {
     }
 }
 
-#[derive(PartialEq, Eq, Derivative)]
+#[derive(PartialEq, Eq, Derivative, Clone)]
 #[derivative(Debug)]
-pub enum Segment<T: TemplateType, IN: Bool> {
-    Literal(String),
+pub enum Segment<T: TemplateType, IN: Bool = False> {
+    Raw(String),
     Env(
         String,
         #[derivative(Debug = "ignore")] (T::EnvsAllowed, IN::Inverse),
@@ -63,7 +63,7 @@ impl<'a, T: TemplateType, IN: Bool> TryFrom<ASeg<'a>> for Segment<T, IN> {
     fn try_from(value: ASeg) -> Result<Self, Self::Error> {
         use ast::TemplateSegment as ATem;
         match value {
-            ASeg::Literal(r) => Ok(Self::Literal(r.iter().map(ToString::to_string).collect())),
+            ASeg::Literal(r) => Ok(Self::Raw(r.iter().map(ToString::to_string).collect())),
             ASeg::Template(ATem { tag: 'e', inner }) => {
                 Self::prim_gen(Self::Env, 'e', inner, || Self::allowed_plus_outer('e'))
             }
@@ -146,7 +146,7 @@ mod tests {
             tem,
             vec![
                 Segment::Env("HOME".to_owned(), get_d()),
-                Segment::Literal("/file.txt".to_owned())
+                Segment::Raw("/file.txt".to_owned())
             ]
         );
 
@@ -172,7 +172,7 @@ mod tests {
         assert_eq!(
             tem,
             vec![
-                Segment::Literal("foo-".to_owned()),
+                Segment::Raw("foo-".to_owned()),
                 Segment::Var("bar".to_owned(), get_d()),
             ]
         );
@@ -199,9 +199,9 @@ mod tests {
         assert_eq!(
             tem,
             vec![
-                Segment::Literal("foo-".to_owned()),
+                Segment::Raw("foo-".to_owned()),
                 Segment::Var("bar".to_owned(), get_d()),
-                Segment::Literal("-".to_owned()),
+                Segment::Raw("-".to_owned()),
                 Segment::Prov("baz".to_owned(), get_d())
             ]
         );
@@ -226,9 +226,9 @@ mod tests {
                 Segment::Prov("baz".to_owned(), get_d()),
                 Segment::Expr(
                     vec![
-                        Segment::Literal("foo(".to_owned()),
+                        Segment::Raw("foo(".to_owned()),
                         Segment::Prov("foo".to_owned(), get_d()),
-                        Segment::Literal(")".to_owned())
+                        Segment::Raw(")".to_owned())
                     ],
                     get_d()
                 )

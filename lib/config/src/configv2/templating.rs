@@ -17,8 +17,6 @@ use ether::Either;
 use futures::Stream;
 pub use helpers::*;
 use itertools::Itertools;
-use once_cell::sync::Lazy;
-use regex::Regex;
 use serde::Deserialize;
 use std::{
     borrow::Cow,
@@ -32,10 +30,12 @@ use thiserror::Error;
 
 mod parser;
 
+use parser::Segment;
+
 #[derive(Deserialize, PartialEq, Eq, Clone, Derivative)]
 #[derivative(Debug)]
-#[serde(bound = "V: serde::de::DeserializeOwned")]
-#[serde(try_from = "TemplateTmp<V, T>")]
+#[serde(try_from = "TemplatedString<T>")]
+#[serde(bound = "")]
 pub enum Template<
     V: FromStr,
     T: TemplateType,
@@ -65,6 +65,69 @@ pub enum Template<
         #[derivative(Debug = "ignore")]
         __dontuse: (ED, VD, T::ProvAllowed),
     },
+}
+
+#[derive(Debug, Error)]
+pub enum TemplateGenError<V: FromStr>
+where
+    V::Err: StdError + 'static,
+{
+    #[error("{0}")]
+    FromStr(#[source] V::Err),
+}
+
+impl<V, T, VD: Bool, ED: Bool> TryFrom<TemplatedString<T>> for Template<V, T, VD, ED>
+where
+    V: FromStr,
+    V::Err: StdError,
+    T: TemplateType,
+{
+    type Error = TemplateGenError<V>;
+
+    fn try_from(value: TemplatedString<T>) -> Result<Self, Self::Error> {
+        match value.as_literal() {
+            Ok(s) => match s.parse::<V>() {
+                Ok(v) => Ok(Self::Literal { value: v }),
+                Err(e) => Err(TemplateGenError::FromStr(e)),
+            },
+            Err(template) => {
+                if T::EnvsAllowed::VALUE {
+                    Ok(Self::Env {
+                        template,
+                        __dontuse: TryDefault::try_default()
+                            .expect("should have already been checked"),
+                    })
+                } else {
+                    Ok(Self::PreVars {
+                        template,
+                        next: if T::ProvAllowed::VALUE {
+                            |s| {
+                                Ok(Template::NeedsProviders {
+                                    script: s,
+                                    __dontuse: TryDefault::try_default().unwrap(),
+                                })
+                            }
+                        } else {
+                            |s| {
+                                let s = s.try_collect().unwrap();
+                                s.parse()
+                                    .map_err(|e: <V as FromStr>::Err| {
+                                        super::VarsError::InvalidString {
+                                            typename: std::any::type_name::<V>(),
+                                            from: s,
+                                            error: e.into(),
+                                        }
+                                    })
+                                    .map(|v| Template::Literal { value: v })
+                            }
+                        },
+                        __dontuse: TryDefault::try_default()
+                            .expect("should already have been checked"),
+                    })
+                }
+            }
+        }
+    }
 }
 
 impl<T: TemplateType> Template<String, T, True, True>
@@ -115,7 +178,7 @@ where
             Self::NeedsProviders { script, .. } => script
                 .iter()
                 .filter_map(|p| match p {
-                    TemplatePiece::Provider(p, ..) => Some(p.clone()),
+                    Segment::Prov(p, ..) => Some(p.clone()),
                     _ => None,
                 })
                 .collect(),
@@ -208,14 +271,14 @@ pub struct MissingEnvVar(String);
 #[derive(Debug, PartialEq, Eq, Deserialize, Clone)]
 #[serde(try_from = "&str")]
 #[serde(bound = "")]
-pub struct TemplatedString<T: TemplateType>(Vec<TemplatePiece<T>>);
+pub struct TemplatedString<T: TemplateType>(Vec<Segment<T>>);
 
 impl<T: TemplateType> TemplatedString<T> {
     fn try_collect(self) -> Option<String> {
         self.0
             .into_iter()
             .map(|p| match p {
-                TemplatePiece::Raw(s) => Some(s),
+                parser::Segment::Raw(s) => Some(s),
                 _ => None,
             })
             .collect()
@@ -224,28 +287,40 @@ impl<T: TemplateType> TemplatedString<T> {
     fn collapse(self) -> Self {
         self.into_iter()
             .coalesce(|a, b| match (a, b) {
-                (TemplatePiece::Raw(x), TemplatePiece::Raw(y)) => Ok(TemplatePiece::Raw(x + &y)),
+                (Segment::Raw(x), Segment::Raw(y)) => Ok(Segment::Raw(x + &y)),
                 (x, y) => Err((x, y)),
             })
             .collect()
     }
 
-    fn iter(&self) -> impl Iterator<Item = &TemplatePiece<T>> {
+    fn as_literal(mut self) -> Result<String, Self> {
+        let one = self.0.pop();
+        match (one, self.0.len()) {
+            (Some(Segment::Raw(s)), 0) => Ok(s),
+            (Some(seg), _) => {
+                self.0.push(seg);
+                Err(self)
+            }
+            (None, _) => Err(self),
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &parser::Segment<T>> {
         self.0.iter()
     }
 }
 
 impl<T: TemplateType> IntoIterator for TemplatedString<T> {
-    type Item = TemplatePiece<T>;
-    type IntoIter = <Vec<TemplatePiece<T>> as IntoIterator>::IntoIter;
+    type Item = Segment<T>;
+    type IntoIter = <Vec<Segment<T>> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl<T: TemplateType> FromIterator<TemplatePiece<T>> for TemplatedString<T> {
-    fn from_iter<I: IntoIterator<Item = TemplatePiece<T>>>(iter: I) -> Self {
+impl<T: TemplateType> FromIterator<Segment<T>> for TemplatedString<T> {
+    fn from_iter<I: IntoIterator<Item = Segment<T>>>(iter: I) -> Self {
         Self(iter.into_iter().collect_vec())
     }
 }
@@ -260,7 +335,7 @@ where
         self.0
             .into_iter()
             .map(|p| match p {
-                TemplatePiece::Var(v, ..) => {
+                Segment::Var(v, ..) => {
                     let path = v.split('.').collect_vec();
                     path.iter()
                         .fold(Some(vars), |vars, n| vars.and_then(|v| v.get(n)))
@@ -271,7 +346,7 @@ where
                             super::VarTerminal::Bool(b) => b.to_string(),
                         })
                         .ok_or_else(|| super::VarsError::VarNotFound(v))
-                        .map(TemplatePiece::Raw)
+                        .map(Segment::Raw)
                 }
                 other => Ok(other),
             })
@@ -287,10 +362,10 @@ where
         self.0
             .into_iter()
             .map(|p| match p {
-                TemplatePiece::Env(e, ..) => evars
+                Segment::Env(e, ..) => evars
                     .get(&e)
                     .cloned()
-                    .map(TemplatePiece::Raw)
+                    .map(Segment::Raw)
                     .ok_or_else(|| MissingEnvVar(e)),
                 other => Ok(other),
             })
@@ -299,44 +374,10 @@ where
 }
 
 impl<T: TemplateType> FromStr for TemplatedString<T> {
-    type Err = &'static str;
+    type Err = parser::TemplateParseError;
 
-    fn from_str(mut s: &str) -> Result<Self, Self::Err> {
-        static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$\{(?:([vpe]):)(.*?)}").unwrap());
-        static REGEX2: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[^\$]*").unwrap());
-
-        let mut pieces = Vec::new();
-        while !s.is_empty() {
-            let caps = REGEX2.captures(s).unwrap();
-            let segment = caps.get(0).unwrap().as_str();
-            if !segment.is_empty() {
-                pieces.push(TemplatePiece::Raw(segment.to_owned()));
-            }
-            s = s.strip_prefix(segment).unwrap();
-
-            if s.is_empty() {
-                return Ok(Self(pieces));
-            }
-
-            let Some(caps) = REGEX.captures(s) else {
-                return Err("mismatched template pattern");
-            };
-
-            let r#type = |x: String| -> Result<TemplatePiece<T>, &'static str> {
-                Ok(match caps.get(1).map(|c| c.as_str()).unwrap_or("") {
-                    "v" => TemplatePiece::Var(x, T::VarsAllowed::try_default().unwrap()),
-                    "p" => TemplatePiece::Provider(x, T::ProvAllowed::try_default().unwrap()),
-                    "e" => TemplatePiece::Env(x, T::EnvsAllowed::try_default().unwrap()),
-                    _ => unreachable!(),
-                })
-            };
-
-            let segment = caps.get(0).unwrap().as_str();
-            let path = caps.get(2).unwrap().as_str();
-            pieces.push(r#type(path.to_owned())?);
-            s = s.strip_prefix(segment).unwrap();
-        }
-        Ok(Self(pieces))
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parser::parse_template_string(s).map(Self)
     }
 }
 
@@ -345,79 +386,6 @@ impl<T: TemplateType> TryFrom<&str> for TemplatedString<T> {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         value.parse()
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TemplatePiece<T: TemplateType> {
-    Raw(String),
-    Env(String, T::EnvsAllowed),
-    Var(String, T::VarsAllowed),
-    Provider(String, T::ProvAllowed),
-}
-
-/// Temporary Template type that allows all variants to exist, but can fail in conversion into the
-/// main Template based on the marker type of `T`.
-#[derive(Debug, Deserialize, Clone)]
-#[serde(bound = "V: serde::de::DeserializeOwned")]
-enum TemplateTmp<V, T: TemplateType> {
-    #[serde(rename = "l")]
-    Literal(V),
-    #[serde(rename = "e")]
-    Env(TemplatedString<T>),
-    #[serde(rename = "v")]
-    Vars(TemplatedString<T>),
-    #[serde(rename = "s")]
-    Script(TemplatedString<T>),
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Error)]
-enum TemplateError {
-    #[error(r#"invalid type tag "{0}" for Template"#)]
-    InvalidTypeTag(&'static str),
-    #[error(r#"invalid template type "{0}" with value "{1}""#)]
-    InvalidTemplateForType(&'static str, String),
-}
-
-impl<V: FromStr, T: TemplateType, ED: Bool, VD: Bool> TryFrom<TemplateTmp<V, T>>
-    for Template<V, T, ED, VD>
-where
-    <V as FromStr>::Err: StdError + 'static,
-{
-    type Error = TemplateError;
-
-    fn try_from(value: TemplateTmp<V, T>) -> Result<Self, Self::Error> {
-        Ok(match value {
-            TemplateTmp::Literal(x) => Self::Literal { value: x },
-            TemplateTmp::Env(template) => Self::Env {
-                template,
-                __dontuse: TryDefault::try_default().ok_or(TemplateError::InvalidTypeTag("e"))?,
-            },
-            TemplateTmp::Vars(template) => Self::PreVars {
-                template,
-                next: |s| {
-                    let s = s.try_collect().unwrap();
-                    s.parse()
-                        .map_err(|e: <V as FromStr>::Err| super::VarsError::InvalidString {
-                            typename: std::any::type_name::<V>(),
-                            from: s,
-                            error: e.into(),
-                        })
-                        .map(|v| Template::Literal { value: v })
-                },
-                __dontuse: TryDefault::try_default().ok_or(TemplateError::InvalidTypeTag("v"))?,
-            },
-            TemplateTmp::Script(template) => Self::PreVars {
-                template,
-                next: |s| {
-                    Ok(Template::NeedsProviders {
-                        script: s,
-                        __dontuse: TryDefault::try_default().unwrap(),
-                    })
-                },
-                __dontuse: TryDefault::try_default().ok_or(TemplateError::InvalidTypeTag("s"))?,
-            },
-        })
     }
 }
 
@@ -439,76 +407,6 @@ where
 {
     fn try_default() -> Option<Self> {
         Some((T::try_default()?, U::try_default()?, V::try_default()?))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn templated_strings_raw() {
-        let TemplatedString::<EnvsOnly>(t) = "hello".parse().unwrap();
-        assert_eq!(t, vec![TemplatePiece::Raw("hello".to_owned())]);
-        let TemplatedString::<VarsOnly>(t) = "hello".parse().unwrap();
-        assert_eq!(t, vec![TemplatePiece::Raw("hello".to_owned())]);
-        let TemplatedString::<Regular>(t) = "hello".parse().unwrap();
-        assert_eq!(t, vec![TemplatePiece::Raw("hello".to_owned())]);
-    }
-
-    #[test]
-    fn templated_strings_single() {
-        let TemplatedString::<EnvsOnly>(v) = "${e:HOME}".parse().unwrap();
-        assert_eq!(
-            v,
-            vec![TemplatePiece::Env(
-                "HOME".to_owned(),
-                TryDefault::try_default().unwrap()
-            )]
-        );
-        let TemplatedString::<VarsOnly>(v) = "${v:x}".parse().unwrap();
-        assert_eq!(
-            v,
-            vec![TemplatePiece::Var(
-                "x".to_owned(),
-                TryDefault::try_default().unwrap()
-            )]
-        );
-        let TemplatedString::<Regular>(v) = "${v:x}".parse().unwrap();
-        assert_eq!(
-            v,
-            vec![TemplatePiece::Var(
-                "x".to_owned(),
-                TryDefault::try_default().unwrap()
-            )]
-        );
-        let TemplatedString::<Regular>(v) = "${p:foobar}".parse().unwrap();
-        assert_eq!(
-            v,
-            vec![TemplatePiece::Provider(
-                "foobar".to_owned(),
-                TryDefault::try_default().unwrap()
-            )]
-        );
-    }
-
-    #[test]
-    fn template_strings_vec() {
-        assert_eq!(
-            "foo${v:bar}".parse::<TemplatedString<VarsOnly>>(),
-            Ok(TemplatedString(vec![
-                TemplatePiece::Raw("foo".to_owned()),
-                TemplatePiece::Var("bar".to_owned(), TryDefault::try_default().unwrap())
-            ]))
-        );
-
-        assert_eq!(
-            "${e:HOME}/file.txt".parse::<TemplatedString<EnvsOnly>>(),
-            Ok(TemplatedString(vec![
-                TemplatePiece::Env("HOME".to_owned(), TryDefault::try_default().unwrap()),
-                TemplatePiece::Raw("/file.txt".to_owned()),
-            ]))
-        );
     }
 }
 

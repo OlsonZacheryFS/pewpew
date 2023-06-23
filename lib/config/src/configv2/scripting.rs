@@ -1,5 +1,4 @@
 use super::templating::{Template, TemplateType, True, OK};
-use crate::configv2::templating::TemplatePiece;
 use boa_engine::{
     object::{JsFunction, ObjectInitializer},
     prelude::*,
@@ -44,16 +43,21 @@ impl EvalExpr {
             "function ____eval(____provider_values){{ return {}; }}",
             script
                 .into_iter()
-                .map(|p| match p {
-                    TemplatePiece::Raw(s) => s,
-                    TemplatePiece::Provider(p, ..) => {
-                        let s = format!("____provider_values.{p}");
-                        let _ = uses_p.set(true);
-                        needed.push(p);
-                        s
-                    }
-                    _ => unreachable!(),
-                })
+                .map(
+                    |_| {
+                        todo!();
+                        ""
+                    } /*|p| match p {
+                          TemplatePiece::Raw(s) => s,
+                          TemplatePiece::Provider(p, ..) => {
+                              let s = format!("____provider_values.{p}");
+                              let _ = uses_p.set(true);
+                              needed.push(p);
+                              s
+                          }
+                          _ => unreachable!(),
+                      }*/
+                )
                 .collect::<String>()
         );
         if !uses_p.into_inner().unwrap_or(false) {
