@@ -136,7 +136,7 @@ mod tests {
 
         static TEST_FILE: &str = r##"
 !file
-  path: !l file.csv
+  path: file.csv
   repeat: true
   unique: true
   auto_return: force

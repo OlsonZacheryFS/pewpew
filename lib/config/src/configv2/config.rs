@@ -104,7 +104,7 @@ mod tests {
         static TEST2: &str = r#"
 request_timeout: 23s
 headers:
-  one: !l two
+  one: two
 keepalive: 19s
         "#;
 

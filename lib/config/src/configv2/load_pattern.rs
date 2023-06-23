@@ -172,7 +172,7 @@ mod tests {
     fn test_single_values() {
         // Percents
         type TP = Template<Percent, VarsOnly, False>;
-        let per = from_yaml::<TP>("!l 1%").unwrap();
+        let per = from_yaml::<TP>("1%").unwrap();
         assert_eq!(
             per,
             Template::Literal {
@@ -182,7 +182,7 @@ mod tests {
 
         // Test fractional percentages
         // Using a sum of powers of 2 for `to` here to prevent float imprecision.
-        let per = from_yaml::<TP>("!l 106.25%").unwrap();
+        let per = from_yaml::<TP>("106.25%").unwrap();
         assert_eq!(
             per,
             Template::Literal {
@@ -191,7 +191,7 @@ mod tests {
         );
 
         // Probably shouldn't, but you can
-        let per = from_yaml::<TP>("!l 1e2%").unwrap();
+        let per = from_yaml::<TP>("1e2%").unwrap();
         assert_eq!(
             per,
             Template::Literal {
@@ -203,26 +203,26 @@ mod tests {
 
         // No negatives
         assert_eq!(
-            from_yaml::<TP>("!l -100%").unwrap_err().to_string(),
+            from_yaml::<TP>("-100%").unwrap_err().to_string(),
             "negative values not allowed"
         );
 
         // No infinities, NaNs, or subnormals
         assert_eq!(
-            from_yaml::<TP>("!l NAN%").unwrap_err().to_string(),
+            from_yaml::<TP>("NAN%").unwrap_err().to_string(),
             "abnormal floats (infinity, NaN, etc.) are not valid Percents"
         );
         assert_eq!(
-            from_yaml::<TP>("!l infinity%").unwrap_err().to_string(),
+            from_yaml::<TP>("infinity%").unwrap_err().to_string(),
             "abnormal floats (infinity, NaN, etc.) are not valid Percents"
         );
         assert_eq!(
-            from_yaml::<TP>("!l 1e-308%").unwrap_err().to_string(),
+            from_yaml::<TP>("1e-308%").unwrap_err().to_string(),
             "abnormal floats (infinity, NaN, etc.) are not valid Percents"
         );
 
         // Zero is ok though
-        let per = from_yaml::<TP>("!l 0%").unwrap();
+        let per = from_yaml::<TP>("0%").unwrap();
         assert_eq!(
             per,
             Template::Literal {
@@ -232,7 +232,7 @@ mod tests {
 
         // `%` is required
         assert_eq!(
-            from_yaml::<TP>("!l 50").unwrap_err().to_string(),
+            from_yaml::<TP>("50").unwrap_err().to_string(),
             "missing '%' on the percent"
         )
     }
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn test_single_load_pattern() {
         let LoadPatternTemp::Linear { from, to, over } =
-            from_yaml("!linear\n  from: !l 50%\n  to: !l 100%\n  over: 5m").unwrap();
+            from_yaml("!linear\n  from: 50%\n  to: 100%\n  over: 5m").unwrap();
         assert_eq!(
             from,
             Some(Template::Literal {
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(over, Duration::from_secs(5 * 60));
 
         let LoadPatternTemp::Linear { from, to, over } =
-            from_yaml("!linear\n  to: !l 20%\n  over: 1s").unwrap();
+            from_yaml("!linear\n  to: 20%\n  over: 1s").unwrap();
         assert!(matches!(from, None));
         assert_eq!(
             to,
@@ -271,8 +271,8 @@ mod tests {
     fn test_full_load_pattern() {
         static TEST1: &str = r#"
 - !linear
-    from: !l 25%
-    to: !l 100%
+    from: 25%
+    to: 100%
     over: 1h
         "#;
 
@@ -295,7 +295,7 @@ mod tests {
 
         static TEST2: &str = r#"
  - !linear
-     to: !l 300%
+     to: 300%
      over: 5m
         "#;
 
@@ -318,10 +318,10 @@ mod tests {
 
         static TEST3: &str = r#"
  - !linear
-     to: !l 62.5%
+     to: 62.5%
      over: 59s
  - !linear
-     to: !l 87.5%
+     to: 87.5%
      over: 22s
         "#;
 

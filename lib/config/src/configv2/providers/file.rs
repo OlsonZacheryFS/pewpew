@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_file_provider() {
-        static TEST1: &str = "path: !l file.txt";
+        static TEST1: &str = "path: file.txt";
 
         let FileProvider::<False> {
             path,
@@ -249,7 +249,7 @@ mod tests {
         assert_eq!(random, false);
 
         static TEST2: &str = r"
-path: !l file2.txt
+path: file2.txt
 repeat: true
 unique: true
 auto_return: !if_not_full
@@ -281,7 +281,7 @@ random: true
         assert_eq!(random, true);
 
         static TEST3: &str = r"
-path: !l file3.csv
+path: file3.csv
 format: !csv
   headers:
     - foo

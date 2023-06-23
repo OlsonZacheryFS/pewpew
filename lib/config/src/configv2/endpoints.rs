@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn test_body() {
-        let EndPointBody::<False>::String(body) = from_yaml("type: str\ncontent: !l my text").unwrap() else {
+        let EndPointBody::<False>::String(body) = from_yaml("type: str\ncontent: my text").unwrap() else {
             panic!("was not template variant")
         };
         assert_eq!(
@@ -300,7 +300,7 @@ mod tests {
         );
 
         // TODO: maybe find a way to not require a single value array here
-        let EndPointBody::<False>::File(_, file) = from_yaml("type: file\ncontent: [!l body.txt]").unwrap() else {
+        let EndPointBody::<False>::File(_, file) = from_yaml("type: file\ncontent: [body.txt]").unwrap() else {
             panic!("was not file variant")
         };
         assert_eq!(
@@ -315,14 +315,14 @@ mod tests {
         content:
           foo:
             headers:
-              Content-Type: !l image/jpeg
+              Content-Type: image/jpeg
             body:
               type: file
-              content: [!l foo.jpg]
+              content: [foo.jpg]
           bar:
             body:
               type: str
-              content: !l some text"#;
+              content: some text"#;
         let EndPointBody::<False>::Multipart(multipart) = from_yaml(TEST).unwrap() else {
                     panic!("was not multipart variant")
                 };
@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_endpoint() {
-        static TEST: &str = r#"url: !l example.com"#;
+        static TEST: &str = r#"url: example.com"#;
         let Endpoint::<False> {
             declare,
             headers,
