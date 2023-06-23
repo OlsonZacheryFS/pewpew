@@ -1,10 +1,11 @@
 use super::{Bool, False, TemplateType, True, TryDefault};
 use ast::Segment as ASeg;
+use derivative::Derivative;
 use nom::error::Error as NomError;
 use std::convert::TryFrom;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum TemplateParseError {
     #[error("parser error: {0}")]
     NomErr(#[from] NomError<String>),
@@ -28,12 +29,23 @@ impl<'a> From<NomError<&'a str>> for TemplateParseError {
     }
 }
 
+#[derive(PartialEq, Eq, Derivative)]
+#[derivative(Debug)]
 pub enum Segment<T: TemplateType, IN: Bool> {
     Literal(String),
-    Env(String, (T::EnvsAllowed, IN::Inverse)),
-    Var(String, (T::VarsAllowed, IN::Inverse)),
-    Prov(String, T::ProvAllowed),
-    Expr(Vec<Segment<T, True>>, (T::ProvAllowed, IN::Inverse)),
+    Env(
+        String,
+        #[derivative(Debug = "ignore")] (T::EnvsAllowed, IN::Inverse),
+    ),
+    Var(
+        String,
+        #[derivative(Debug = "ignore")] (T::VarsAllowed, IN::Inverse),
+    ),
+    Prov(String, #[derivative(Debug = "ignore")] T::ProvAllowed),
+    Expr(
+        Vec<Segment<T, True>>,
+        #[derivative(Debug = "ignore")] (T::ProvAllowed, IN::Inverse),
+    ),
 }
 
 pub fn parse_template_string<T: TemplateType>(
@@ -62,7 +74,7 @@ impl<'a, T: TemplateType, IN: Bool> TryFrom<ASeg<'a>> for Segment<T, IN> {
                 Self::prim_gen(Self::Prov, 'p', inner, || Self::allowed_flag('p'))
             }
             ASeg::Template(ATem { tag: 'x', inner }) => {
-                let flags = TryDefault::try_default().ok_or(TemplateParseError::InvalidNested)?;
+                let flags = Self::allowed_plus_outer('x')?;
                 let inner = inner
                     .into_iter()
                     .map(Segment::<T, True>::try_from)
@@ -111,6 +123,124 @@ fn as_primitive(seg: Vec<ASeg>) -> Option<String> {
     match &seg[..] {
         [ASeg::Literal(r)] => Some(r.iter().map(ToString::to_string).collect()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TemplateParseError::*;
+    use super::*;
+    use crate::configv2::templating::{EnvsOnly, Regular, VarsOnly};
+
+    fn get_d<D: TryDefault>() -> D {
+        D::try_default().unwrap()
+    }
+
+    #[test]
+    fn env_template() {
+        type ET = Segment<EnvsOnly, False>;
+
+        let input = "${e:HOME}/file.txt";
+        let tem: Vec<ET> = parse_template_string(input).unwrap();
+        assert_eq!(
+            tem,
+            vec![
+                Segment::Env("HOME".to_owned(), get_d()),
+                Segment::Literal("/file.txt".to_owned())
+            ]
+        );
+
+        let input = "${v:x}";
+        let err = parse_template_string::<EnvsOnly>(input).unwrap_err();
+        assert_eq!(err, InvalidTemplateType('v'));
+        let input = "${p:x}";
+        let err = parse_template_string::<EnvsOnly>(input).unwrap_err();
+        assert_eq!(err, InvalidTemplateType('p'));
+        let input = "${x:x}";
+        let err = parse_template_string::<EnvsOnly>(input).unwrap_err();
+        assert_eq!(err, InvalidTemplateType('x'));
+
+        let input = "${e:foo${p:bar}}";
+        let err = parse_template_string::<EnvsOnly>(input).unwrap_err();
+        assert_eq!(err, ComplexPrimitive('e'));
+    }
+
+    #[test]
+    fn var_templates() {
+        let input = "foo-${v:bar}";
+        let tem = parse_template_string::<VarsOnly>(input).unwrap();
+        assert_eq!(
+            tem,
+            vec![
+                Segment::Literal("foo-".to_owned()),
+                Segment::Var("bar".to_owned(), get_d()),
+            ]
+        );
+
+        let input = "${e:x}";
+        let err = parse_template_string::<VarsOnly>(input).unwrap_err();
+        assert_eq!(err, InvalidTemplateType('e'));
+        let input = "${p:x}";
+        let err = parse_template_string::<VarsOnly>(input).unwrap_err();
+        assert_eq!(err, InvalidTemplateType('p'));
+        let input = "${x:x}";
+        let err = parse_template_string::<VarsOnly>(input).unwrap_err();
+        assert_eq!(err, InvalidTemplateType('x'));
+
+        let input = "${v:foo${p:bar}}";
+        let err = parse_template_string::<VarsOnly>(input).unwrap_err();
+        assert_eq!(err, ComplexPrimitive('v'));
+    }
+
+    #[test]
+    fn simple_reg_templates() {
+        let input = "foo-${v:bar}-${p:baz}";
+        let tem = parse_template_string::<Regular>(input).unwrap();
+        assert_eq!(
+            tem,
+            vec![
+                Segment::Literal("foo-".to_owned()),
+                Segment::Var("bar".to_owned(), get_d()),
+                Segment::Literal("-".to_owned()),
+                Segment::Prov("baz".to_owned(), get_d())
+            ]
+        );
+
+        let input = "${e:d}";
+        let err = parse_template_string::<Regular>(input).unwrap_err();
+        assert_eq!(err, InvalidTemplateType('e'));
+
+        let input = "${p:foo${p:bar}}";
+        let err = parse_template_string::<Regular>(input).unwrap_err();
+        assert_eq!(err, ComplexPrimitive('p'));
+    }
+
+    #[test]
+    fn expr_reg_templates() {
+        let input = "${v:bar}${p:baz}${x:foo(${p:foo})}";
+        let tem = parse_template_string::<Regular>(input).unwrap();
+        assert_eq!(
+            tem,
+            vec![
+                Segment::Var("bar".to_owned(), get_d()),
+                Segment::Prov("baz".to_owned(), get_d()),
+                Segment::Expr(
+                    vec![
+                        Segment::Literal("foo(".to_owned()),
+                        Segment::Prov("foo".to_owned(), get_d()),
+                        Segment::Literal(")".to_owned())
+                    ],
+                    get_d()
+                )
+            ]
+        );
+
+        let input = "${x:${v:_}}";
+        let err = parse_template_string::<Regular>(input).unwrap_err();
+        assert_eq!(err, InvalidNested);
+        let input = "${x:${x:_}}";
+        let err = parse_template_string::<Regular>(input).unwrap_err();
+        assert_eq!(err, InvalidNested);
     }
 }
 
