@@ -21,8 +21,8 @@ pub mod templating;
 
 pub mod common;
 
+pub use self::config::{Config, General};
 pub use common::Headers;
-pub use config::{Config, General};
 pub use endpoints::{EndPointBody, Endpoint};
 pub use loggers::Logger;
 pub use providers::ProviderType;
