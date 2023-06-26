@@ -250,24 +250,21 @@ where
         })
     }
 
-    pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, Box<dyn StdError>> {
+    pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, EvalExprError> {
         match self {
             Self::Literal { value } => Ok(value.clone()),
-            Self::NeedsProviders { script, __dontuse } => Ok(script
+            Self::NeedsProviders { script, __dontuse } => script
                 .iter()
                 .map(|e| match e {
-                    ExprSegment::Eval(x) => x.evaluate(data.clone()).expect("TODO"),
-                    ExprSegment::Str(s) => s.to_owned(),
+                    ExprSegment::Eval(x) => x.evaluate(data.clone()),
+                    ExprSegment::Str(s) => Ok(s.to_owned()),
                     ExprSegment::ProvDirect(p) => data
                         .as_object()
-                        .expect("TODO")
-                        .get(p.as_str())
-                        .expect("TODO")
-                        .as_str()
-                        .expect("TODO")
-                        .to_owned(),
+                        .and_then(|o| o.get(p.as_str()))
+                        .map(ToString::to_string)
+                        .ok_or_else(|| EvalExprError(format!("provider data {p} not found"))),
                 })
-                .collect()),
+                .collect(),
             _ => unreachable!(),
         }
     }
