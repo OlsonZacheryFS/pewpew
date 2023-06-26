@@ -9,8 +9,10 @@ use diplomatic_bag::DiplomaticBag;
 use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
 use std::{
-    cell::OnceCell,
+    borrow::Cow,
+    cell::{OnceCell, RefCell},
     collections::{BTreeMap, BTreeSet},
+    error::Error as StdError,
 };
 use thiserror::Error;
 use zip_all::zip_all_map;
@@ -28,7 +30,7 @@ pub trait ProviderStream<Ar: Clone + Send + Unpin + 'static> {
 #[derivative(Debug)]
 pub struct EvalExpr {
     #[derivative(Debug = "ignore")]
-    ctx: DiplomaticBag<(Context, JsFunction)>,
+    ctx: DiplomaticBag<(RefCell<Context>, JsFunction)>,
     needed: Vec<String>,
 }
 
@@ -70,7 +72,7 @@ impl EvalExpr {
                     ctx.eval("____eval").unwrap().as_object().unwrap().clone(),
                 )
                 .unwrap();
-                (ctx, efn)
+                (RefCell::new(ctx), efn)
             }),
             needed,
         })
@@ -78,6 +80,54 @@ impl EvalExpr {
 
     pub fn required_providers(&self) -> BTreeSet<&str> {
         self.needed.iter().map(|s| s.as_str()).collect()
+    }
+
+    pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, Box<dyn StdError>> {
+        let values = data
+            .as_object()
+            .expect("TODO")
+            .into_iter()
+            .map(|(s, v)| (s.clone(), (v.clone(), vec![])))
+            .collect();
+        Ok(self.ctx.as_ref().and_then(move |_, (ctx, efn)| {
+            let ctx = &mut *ctx.borrow_mut();
+            Self::eval_raw::<()>(ctx, efn, values)
+                .0
+                .as_str()
+                .expect("TODO")
+                .to_owned()
+        }))
+    }
+
+    fn eval_raw<Ar>(
+        ctx: &mut Context,
+        efn: &JsFunction,
+        values: BTreeMap<String, (serde_json::Value, Vec<Ar>)>,
+    ) -> (serde_json::Value, Vec<Ar>) {
+        // TODO: much better error handling
+        // This is escpecially important when working with DiplomaticBag, as a single panic
+        // will corrupt the shared worker thread.
+        let values: BTreeMap<_, _> = values
+            .into_iter()
+            .map(|(n, (v, ar))| {
+                JsValue::from_json(&v, ctx)
+                    .map_err(EvalExprError::InvalidJsonFromProvider)
+                    .map(|v| (n, (v, ar)))
+            })
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let mut object = ObjectInitializer::new(ctx);
+        for (name, (value, _)) in values.iter() {
+            object.property(name.as_str(), value, Attribute::READONLY);
+        }
+        let object = object.build();
+        (
+            efn.call(&JsValue::Null, &[object.into()], ctx)
+                .unwrap()
+                .to_json(ctx)
+                .unwrap(),
+            values.into_iter().flat_map(|v| v.1 .1).collect_vec(),
+        )
     }
 
     pub fn into_stream<P, Ar, E>(
@@ -90,9 +140,9 @@ impl EvalExpr {
     where
         P: ProviderStream<Ar, Err = E> + Sized + 'static,
         Ar: Clone + Send + Unpin + 'static,
-        E: Unpin + std::error::Error + 'static,
+        E: Unpin + StdError + 'static,
     {
-        let Self { mut ctx, needed } = self;
+        let Self { ctx, needed } = self;
         let providers = needed
             .into_iter()
             .map(|pn| {
@@ -103,33 +153,8 @@ impl EvalExpr {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         Ok(zip_all_map(providers, true).map_ok(move |values| {
-            // TODO: much better error handling
-            // This is escpecially important when working with DiplomaticBag, as a single panic
-            // will corrupt the shared worker thread.
-            ctx.as_mut().and_then(|_, (ctx, efn)| {
-                let efn = &*efn;
-                let values: BTreeMap<_, _> = values
-                    .into_iter()
-                    .map(|(n, (v, ar))| {
-                        JsValue::from_json(&v, ctx)
-                            .map_err(EvalExprError::InvalidJsonFromProvider)
-                            .map(|v| (n, (v, ar)))
-                    })
-                    .collect::<Result<_, _>>()
-                    .unwrap();
-                let mut object = ObjectInitializer::new(ctx);
-                for (name, (value, _)) in values.iter() {
-                    object.property(name.as_str(), value, Attribute::READONLY);
-                }
-                let object = object.build();
-                (
-                    efn.call(&JsValue::Null, &[object.into()], ctx)
-                        .unwrap()
-                        .to_json(ctx)
-                        .unwrap(),
-                    values.into_iter().flat_map(|v| v.1 .1).collect_vec(),
-                )
-            })
+            ctx.as_ref()
+                .and_then(|_, (ctx, efn)| Self::eval_raw(&mut ctx.borrow_mut(), efn, values))
         }))
     }
 }

@@ -238,8 +238,26 @@ where
         }
     }
 
-    pub fn evaluate(&self, _data: Cow<'_, serde_json::Value>) -> Result<String, Box<dyn StdError>> {
-        todo!()
+    pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, Box<dyn StdError>> {
+        match self {
+            Self::Literal { value } => Ok(value.clone()),
+            Self::NeedsProviders { script, __dontuse } => Ok(script
+                .iter()
+                .map(|e| match e {
+                    ExprSegment::Eval(x) => x.evaluate(data.clone()).expect("TODO"),
+                    ExprSegment::Str(s) => s.to_owned(),
+                    ExprSegment::ProvDirect(p) => data
+                        .as_object()
+                        .expect("TODO")
+                        .get(p.as_str())
+                        .expect("TODO")
+                        .as_str()
+                        .expect("TODO")
+                        .to_owned(),
+                })
+                .collect()),
+            _ => unreachable!(),
+        }
     }
 
     pub fn as_static(&self) -> Option<&str> {
