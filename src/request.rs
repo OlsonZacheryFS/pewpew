@@ -27,7 +27,6 @@ use hyper_tls::HttpsConnector;
 use rand::distributions::{Alphanumeric, Distribution};
 use select_any::select_any;
 use serde_json as json;
-use thiserror::Error;
 use tokio::{
     fs::File as TokioFile,
     io::{AsyncRead, ReadBuf},
@@ -187,12 +186,8 @@ impl Outgoing {
     }
 }
 
-#[derive(Debug, Clone, Copy, Error)]
-#[error("Temp")]
-pub struct TempError;
-
 impl ProviderStream<AutoReturn> for providers::Provider {
-    type Err = TempError;
+    type Err = configv2::error::EvalExprError;
     fn as_stream(&self) -> ProviderStreamStream<AutoReturn, Self::Err> {
         let auto_return = self.auto_return.map(|ar| (ar, self.tx.clone()));
         let future = self.rx.clone().map(move |v| {

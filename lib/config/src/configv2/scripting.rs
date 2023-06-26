@@ -1,5 +1,5 @@
 use super::{
-    error::{CreateExprError, EvalExprError, IntoStreamError},
+    error::{CreateExprError, EvalExprError, EvalExprErrorInner, IntoStreamError},
     templating::{Segment, TemplateType, True, OK},
 };
 use boa_engine::{
@@ -67,15 +67,19 @@ impl EvalExpr {
             );
         }
         Ok(Self {
-            ctx: DiplomaticBag::new(move |_| {
+            ctx: DiplomaticBag::<Result<_, CreateExprError>>::new(move |_| {
                 let mut ctx = builtins::get_default_context();
-                ctx.eval(script).expect("TODO");
-                let efn = JsFunction::from_object(
-                    ctx.eval("____eval").unwrap().as_object().unwrap().clone(),
-                )
-                .unwrap();
-                (RefCell::new(ctx), efn)
-            }),
+                ctx.eval(script).map_err(CreateExprError::fn_err)?;
+                let efn = ctx
+                    .eval("____eval")
+                    .ok()
+                    .and_then(|v| v.as_object().cloned())
+                    .and_then(JsFunction::from_object)
+                    .expect("just created eval fn; should be fine");
+                Ok((RefCell::new(ctx), efn))
+            })
+            .transpose()
+            .map_err(DiplomaticBag::into_inner)?,
             needed,
         })
     }
@@ -84,52 +88,44 @@ impl EvalExpr {
         self.needed.iter().map(|s| s.as_str()).collect()
     }
 
-    pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, Box<dyn StdError>> {
+    pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, EvalExprError> {
         let values = data
             .as_object()
-            .expect("TODO")
+            .ok_or_else(|| EvalExprError("provided data was not a Map".to_owned()))?
             .into_iter()
             .map(|(s, v)| (s.clone(), (v.clone(), vec![])))
             .collect();
-        Ok(self.ctx.as_ref().and_then(move |_, (ctx, efn)| {
+        self.ctx.as_ref().and_then(move |_, (ctx, efn)| {
             let ctx = &mut *ctx.borrow_mut();
-            Self::eval_raw::<()>(ctx, efn, values)
-                .0
-                .as_str()
-                .expect("TODO")
-                .to_owned()
-        }))
+            Ok(Self::eval_raw::<()>(ctx, efn, values)?.0.to_string())
+        })
     }
 
     fn eval_raw<Ar>(
         ctx: &mut Context,
         efn: &JsFunction,
         values: BTreeMap<String, (serde_json::Value, Vec<Ar>)>,
-    ) -> (serde_json::Value, Vec<Ar>) {
-        // TODO: much better error handling
-        // This is escpecially important when working with DiplomaticBag, as a single panic
-        // will corrupt the shared worker thread.
+    ) -> Result<(serde_json::Value, Vec<Ar>), EvalExprErrorInner> {
         let values: BTreeMap<_, _> = values
             .into_iter()
             .map(|(n, (v, ar))| {
                 JsValue::from_json(&v, ctx)
-                    .map_err(EvalExprError::InvalidJsonFromProvider)
+                    .map_err(EvalExprErrorInner::InvalidJsonFromProvider)
                     .map(|v| (n, (v, ar)))
             })
-            .collect::<Result<_, _>>()
-            .unwrap();
+            .collect::<Result<_, _>>()?;
         let mut object = ObjectInitializer::new(ctx);
         for (name, (value, _)) in values.iter() {
             object.property(name.as_str(), value, Attribute::READONLY);
         }
         let object = object.build();
-        (
+        Ok((
             efn.call(&JsValue::Null, &[object.into()], ctx)
-                .unwrap()
+                .map_err(EvalExprErrorInner::ExecutionError)?
                 .to_json(ctx)
-                .unwrap(),
+                .map_err(EvalExprErrorInner::InvalidResultJson)?,
             values.into_iter().flat_map(|v| v.1 .1).collect_vec(),
-        )
+        ))
     }
 
     pub fn into_stream<P, Ar, E>(
@@ -142,7 +138,7 @@ impl EvalExpr {
     where
         P: ProviderStream<Ar, Err = E> + Sized + 'static,
         Ar: Clone + Send + Unpin + 'static,
-        E: Unpin + StdError + 'static,
+        E: Send + Unpin + StdError + 'static + From<EvalExprError>,
     {
         let Self { ctx, needed } = self;
         let providers = needed
@@ -154,9 +150,14 @@ impl EvalExpr {
                     .ok_or_else(|| IntoStreamError::MissingProvider(pn.clone()))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-        Ok(zip_all_map(providers, true).map_ok(move |values| {
-            ctx.as_ref()
-                .and_then(|_, (ctx, efn)| Self::eval_raw(&mut ctx.borrow_mut(), efn, values))
+        Ok(zip_all_map(providers, true).and_then(move |values| {
+            ctx.as_ref().and_then(|_, (ctx, efn)| {
+                use futures::future::{err, ok};
+                match Self::eval_raw(&mut ctx.borrow_mut(), efn, values) {
+                    Ok(v) => ok(v),
+                    Err(e) => err(EvalExprError::from(e).into()),
+                }
+            })
         }))
     }
 }

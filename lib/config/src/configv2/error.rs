@@ -1,4 +1,5 @@
 use boa_engine::JsValue;
+use std::error::Error as SError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -24,14 +25,21 @@ pub enum VarsError {
         typename: &'static str,
         from: String,
         #[source]
-        error: Box<dyn std::error::Error>,
+        error: Box<dyn SError>,
     },
 }
 
 #[derive(Debug, Error)]
 pub enum CreateExprError {
-    #[error("failure building JS function: {}", .0.display())]
-    BuildFnFailure(JsValue),
+    #[error("failure building JS function: {0}")]
+    BuildFnFailure(String),
+}
+
+impl CreateExprError {
+    // JsValue is not `Send`, so it is reported as a String first
+    pub(crate) fn fn_err(js: JsValue) -> Self {
+        Self::BuildFnFailure(js.display().to_string())
+    }
 }
 
 #[derive(Debug, Error)]
@@ -40,8 +48,23 @@ pub enum IntoStreamError {
     MissingProvider(String),
 }
 
+#[derive(Debug, Error, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[error("{0}")]
+pub struct EvalExprError(pub(crate) String);
+
+impl From<EvalExprErrorInner> for EvalExprError {
+    // JsValue is not `Send`, so it is reported as a String first
+    fn from(value: EvalExprErrorInner) -> Self {
+        Self(value.to_string())
+    }
+}
+
 #[derive(Debug, Error)]
-pub(crate) enum EvalExprError {
+pub(crate) enum EvalExprErrorInner {
     #[error("provider returned invalid json: {}", .0.display())]
     InvalidJsonFromProvider(JsValue),
+    #[error("error executing JS code: {}", .0.display())]
+    ExecutionError(JsValue),
+    #[error("expression returned invalid json: {}", .0.display())]
+    InvalidResultJson(JsValue),
 }

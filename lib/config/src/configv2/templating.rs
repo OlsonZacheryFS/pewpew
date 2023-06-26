@@ -12,7 +12,7 @@
 //! associated type is False.
 
 use super::{
-    error::{MissingEnvVar, VarsError},
+    error::{EvalExprError, MissingEnvVar, VarsError},
     scripting::EvalExpr,
     PropagateVars,
 };
@@ -208,7 +208,7 @@ where
     where
         P: super::scripting::ProviderStream<Ar, Err = E> + 'static,
         Ar: Clone + Send + Unpin + 'static,
-        E: StdError + Send + Clone + Unpin + 'static,
+        E: StdError + Send + Clone + Unpin + 'static + From<EvalExprError>,
     {
         use futures::stream::repeat;
         match self {
