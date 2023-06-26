@@ -1,4 +1,4 @@
-use config::configv2::{self, error::EvalExprError};
+use config::{self, error::EvalExprError};
 use hyper::http::Error as HttpError;
 use std::{error::Error as StdError, path::PathBuf, sync::Arc, time::SystemTime};
 use thiserror::Error;
@@ -13,7 +13,7 @@ pub enum RecoverableError {
     #[error("connection error: {1}")]
     ConnectionErr(SystemTime, #[source] Arc<dyn StdError + Send + Sync>),
     #[error("{0}")]
-    ExecutingExpression(#[from] Box<configv2::error::EvalExprError>),
+    ExecutingExpression(#[from] Box<config::error::EvalExprError>),
     #[error("request timed out")]
     Timeout(SystemTime),
 }
@@ -42,7 +42,7 @@ pub enum TestError {
     #[error("error opening file `{}`: {}", .0.display(), .1)]
     CannotOpenFile(PathBuf, #[source] Arc<std::io::Error>),
     #[error(transparent)]
-    Config(#[from] Box<configv2::error::LoadTestGenError>),
+    Config(#[from] Box<config::error::LoadTestGenError>),
     #[error("error reading file `{0}`: {1}")]
     FileReading(String, #[source] Arc<std::io::Error>),
     #[error("could not find config file at path `{}`", .0.display())]

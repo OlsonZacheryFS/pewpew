@@ -1,5 +1,4 @@
 use crate::util::str_to_json;
-use config::configv2;
 use itertools::Itertools;
 use rand::distributions::{Distribution, Uniform};
 use serde_json as json;
@@ -23,8 +22,8 @@ pub struct CsvReader {
 
 impl CsvReader {
     pub fn new(
-        config: &configv2::providers::FileProvider,
-        csv: &configv2::providers::CsvParams,
+        config: &config::providers::FileProvider,
+        csv: &config::providers::CsvParams,
         file: &str,
     ) -> Result<Self, io::Error> {
         let file = File::open(file)?;
@@ -36,11 +35,11 @@ impl CsvReader {
             builder.delimiter(*delimiter);
         }
         let (first_row_headers, explicit_headers) = match &csv.headers {
-            configv2::providers::CsvHeaders::Use(b) => {
+            config::providers::CsvHeaders::Use(b) => {
                 builder.has_headers(*b);
                 (*b, None)
             }
-            configv2::providers::CsvHeaders::Provide(v) => (false, Some(v)),
+            config::providers::CsvHeaders::Provide(v) => (false, Some(v)),
         };
         builder.double_quote(csv.double_quote);
         if let Some(quote) = csv.quote {

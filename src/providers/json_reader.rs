@@ -1,4 +1,3 @@
-use config::configv2;
 use rand::distributions::{Distribution, Uniform};
 use serde_json as json;
 
@@ -20,7 +19,7 @@ pub struct JsonReader {
 }
 
 impl JsonReader {
-    pub fn new(config: &configv2::providers::FileProvider, file: &str) -> Result<Self, io::Error> {
+    pub fn new(config: &config::providers::FileProvider, file: &str) -> Result<Self, io::Error> {
         let mut jr = Self {
             staging_buffer: vec![0; 8 * (1 << 10)],
             buffer: Vec::new(),

@@ -1,7 +1,7 @@
 use crate::error::RecoverableError;
 use crate::stats;
 
-use config::configv2::{
+use config::{
     common::ProviderSend,
     templating::{Template, True, VarsOnly},
 };

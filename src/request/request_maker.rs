@@ -1,7 +1,7 @@
 use crate::error::{RecoverableError, TestError};
 use crate::stats;
 
-use config::configv2::{
+use config::{
     self,
     templating::{Regular, Template, True, VarsOnly},
     EndPointBody,
@@ -39,7 +39,7 @@ use std::{
 pub(super) struct RequestMaker {
     pub(super) url: Template<String, Regular, True>,
     pub(super) method: Method,
-    pub(super) headers: configv2::common::Headers<True>,
+    pub(super) headers: config::common::Headers<True>,
     pub(super) body: Option<EndPointBody>,
     pub(super) client:
         Arc<Client<HttpsConnector<HttpConnector<hyper::client::connect::dns::GaiResolver>>>>,

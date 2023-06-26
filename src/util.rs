@@ -18,7 +18,7 @@ pub fn tweak_path(rest: &mut String, base: &Path) {
     *rest = base.with_file_name(&rest).to_string_lossy().into();
 }
 
-use config::configv2::providers::BufferLimit;
+use config::providers::BufferLimit;
 
 pub fn config_limit_to_channel_limit(
     limit: BufferLimit,

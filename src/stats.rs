@@ -729,7 +729,7 @@ pub fn create_try_run_stats_channel(
 // create the stats channel for a full test
 pub fn create_stats_channel(
     test_killer: broadcast::Sender<Result<TestEndReason, TestError>>,
-    config: &config::configv2::General,
+    config: &config::General,
     providers: &BTreeMap<String, providers::Provider>,
     mut console: FCSender<MsgType>,
     run_config: &RunConfig,

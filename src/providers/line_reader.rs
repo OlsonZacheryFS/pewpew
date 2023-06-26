@@ -1,5 +1,4 @@
 use crate::util::str_to_json;
-use config::configv2;
 use rand::distributions::{Distribution, Uniform};
 use serde_json as json;
 
@@ -24,7 +23,7 @@ pub struct LineReader {
 }
 
 impl LineReader {
-    pub fn new(config: &configv2::providers::FileProvider, file: &str) -> Result<Self, io::Error> {
+    pub fn new(config: &config::providers::FileProvider, file: &str) -> Result<Self, io::Error> {
         let mut jr = Self {
             byte_buffer: vec![0; KB8],
             buf_data_len: 0,

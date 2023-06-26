@@ -37,7 +37,7 @@ use crate::error::{RecoverableError, TestError};
 use crate::providers;
 use crate::stats;
 use crate::util::tweak_path;
-use config::configv2::{
+use config::{
     self,
     common::ProviderSend,
     endpoints::MultiPartBodySection,
@@ -187,7 +187,7 @@ impl Outgoing {
 }
 
 impl ProviderStream<AutoReturn> for providers::Provider {
-    type Err = configv2::error::EvalExprError;
+    type Err = config::error::EvalExprError;
     fn as_stream(&self) -> ProviderStreamStream<AutoReturn, Self::Err> {
         let auto_return = self.auto_return.map(|ar| (ar, self.tx.clone()));
         let future = self.rx.clone().map(move |v| {
@@ -202,7 +202,7 @@ impl ProviderStream<AutoReturn> for providers::Provider {
 }
 
 pub struct BuilderContext {
-    pub config: configv2::Config,
+    pub config: config::Config,
     pub config_path: PathBuf,
     // the http client
     pub client:
@@ -216,7 +216,7 @@ pub struct BuilderContext {
 }
 
 pub struct EndpointBuilder {
-    endpoint: configv2::Endpoint,
+    endpoint: config::Endpoint,
     start_stream: Option<Pin<Box<dyn Stream<Item = (Instant, Option<Instant>)> + Send>>>,
 }
 
@@ -226,7 +226,7 @@ fn convert_to_debug<T>(value: &[(String, T)]) -> Vec<String> {
 
 impl EndpointBuilder {
     pub fn new(
-        endpoint: configv2::Endpoint,
+        endpoint: config::Endpoint,
         start_stream: Option<Pin<Box<dyn Stream<Item = (Instant, Option<Instant>)> + Send>>>,
     ) -> Self {
         Self {
@@ -240,7 +240,7 @@ impl EndpointBuilder {
         let mut on_demand_streams: OnDemandStreams = Vec::new();
 
         let providers_to_stream = self.endpoint.get_required_providers();
-        let configv2::Endpoint {
+        let config::Endpoint {
             method,
             headers,
             body,
@@ -612,7 +612,7 @@ pub type StatsTx = futures_channel::UnboundedSender<stats::StatsMessage>;
 pub struct Endpoint {
     body: Option<EndPointBody>,
     client: Arc<Client<HttpsConnector<HttpConnector<hyper::client::connect::dns::GaiResolver>>>>,
-    headers: configv2::Headers<True>,
+    headers: config::Headers<True>,
     max_parallel_requests: Option<NonZeroUsize>,
     method: Method,
     no_auto_returns: bool,

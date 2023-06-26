@@ -1,6 +1,6 @@
 use super::*;
 
-use config::configv2::templating::VarsOnly;
+use config::templating::VarsOnly;
 use futures::TryStreamExt;
 
 pub(super) struct ResponseHandler {

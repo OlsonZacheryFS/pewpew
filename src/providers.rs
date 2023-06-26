@@ -9,7 +9,7 @@ use crate::line_writer::MsgType;
 use crate::util::{config_limit_to_channel_limit, json_value_to_string};
 use crate::TestEndReason;
 
-use config::configv2::{self, common::ProviderSend};
+use config::{self, common::ProviderSend, providers};
 use ether::Either3;
 use futures::{
     channel::mpsc::{self, channel, Sender as FCSender},
@@ -58,7 +58,7 @@ impl Provider {
 // create a file provider. It takes a "test_killer" because a file provider has the means of killing a test
 // if it encounters an error while reading from the file
 pub fn file(
-    fp: configv2::providers::FileProvider,
+    fp: providers::FileProvider,
     test_killer: broadcast::Sender<Result<TestEndReason, TestError>>,
     name: &str,
     auto_buffer_start_size: usize,
@@ -69,15 +69,15 @@ pub fn file(
     let file2 = file.clone();
     // create a stream from the file that yields values
     let stream = match fp.format {
-        configv2::providers::FileReadFormat::Csv(ref csv) => Either3::A(into_stream(
+        providers::FileReadFormat::Csv(ref csv) => Either3::A(into_stream(
             CsvReader::new(&fp, csv, &file)
                 .map_err(|e| TestError::CannotOpenFile(file.into(), e.into()))?,
         )),
-        configv2::providers::FileReadFormat::Json => Either3::B(into_stream(
+        providers::FileReadFormat::Json => Either3::B(into_stream(
             JsonReader::new(&fp, &file)
                 .map_err(|e| TestError::CannotOpenFile(file.into(), e.into()))?,
         )),
-        configv2::providers::FileReadFormat::Line => Either3::C(into_stream(
+        providers::FileReadFormat::Line => Either3::C(into_stream(
             LineReader::new(&fp, &file)
                 .map_err(|e| TestError::CannotOpenFile(file.into(), e.into()))?,
         )),
@@ -111,7 +111,7 @@ pub fn file(
 
 // create a response provider
 pub fn response(
-    rp: configv2::providers::ResponseProvider,
+    rp: providers::ResponseProvider,
     name: &str,
     auto_buffer_start_size: usize,
 ) -> Provider {
@@ -124,7 +124,7 @@ pub fn response(
 }
 
 // create a list provider
-pub fn list(lp: configv2::providers::ListProvider, name: &str) -> Provider {
+pub fn list(lp: providers::ListProvider, name: &str) -> Provider {
     debug!("providers::list={:?}", lp);
     // create the channel for the provider
     let unique = lp.unique;
@@ -142,7 +142,7 @@ pub fn list(lp: configv2::providers::ListProvider, name: &str) -> Provider {
 }
 
 // create a range provider
-pub fn range(rp: configv2::providers::RangeProvider, name: &str) -> Provider {
+pub fn range(rp: providers::RangeProvider, name: &str) -> Provider {
     debug!("providers::range={:?}", rp);
     // create the channel for the provider
     let limit = channel::Limit::dynamic(5);
@@ -218,7 +218,7 @@ impl Sink<json::Value> for Logger {
 
 // create a logger. Takes a test_killer because `Logger`s have the means of killing a test
 pub fn logger(
-    logger: configv2::Logger,
+    logger: config::Logger,
     test_killer: &broadcast::Sender<Result<TestEndReason, TestError>>,
     writer: FCSender<MsgType>,
 ) -> Logger {

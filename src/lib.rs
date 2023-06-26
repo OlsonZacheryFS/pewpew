@@ -13,7 +13,7 @@ mod util;
 use crate::error::TestError;
 use crate::stats::{create_stats_channel, create_try_run_stats_channel, StatsMessage};
 
-use config::configv2::{self, common::ProviderSend, loggers::LogTo, templating::Template, Logger};
+use config::{self, common::ProviderSend, loggers::LogTo, templating::Template, LoadTest, Logger};
 
 use clap::{Args, Subcommand, ValueEnum};
 use ether::Either;
@@ -466,7 +466,7 @@ async fn _create_run(
     log::trace!("env_vars={:?}", env_vars.clone());
     let output_format = exec_config.get_output_format();
     let config_file_path = exec_config.get_config_file().clone();
-    let mut config = configv2::LoadTest::from_yaml(
+    let mut config = LoadTest::from_yaml(
         std::str::from_utf8(&config_bytes).expect("TODO: HANDLE THIS"),
         exec_config.get_config_file(),
         &env_vars,
@@ -669,7 +669,7 @@ fn create_config_watcher(
     run_config: RunConfig,
     config_file_path: PathBuf,
     stats_tx: FCUnboundedSender<StatsMessage>,
-    mut previous_config_providers: BTreeMap<String, configv2::ProviderType>,
+    mut previous_config_providers: BTreeMap<String, config::ProviderType>,
     mut previous_providers: Arc<BTreeMap<String, providers::Provider>>,
 ) {
     let start_time = Instant::now();
@@ -728,7 +728,7 @@ fn create_config_watcher(
             // A decent amount of this code seems similar to that in `_create_run`; could
             // this be unified into a common function?
 
-            let config = configv2::LoadTest::from_yaml(
+            let config = LoadTest::from_yaml(
                 std::str::from_utf8(&config_bytes).expect("TODO"),
                 &config_file_path,
                 &env_vars,
@@ -847,7 +847,7 @@ fn create_config_watcher(
 ///
 /// TODO.
 fn create_try_run_future(
-    mut config: configv2::LoadTest,
+    mut config: LoadTest,
     try_config: TryConfig,
     test_ended_tx: broadcast::Sender<Result<TestEndReason, TestError>>,
     stdout: FCSender<MsgType>,
@@ -1018,7 +1018,7 @@ fn create_try_run_future(
 ///
 /// Returns an `Err` if the config file is missing data that a full test requires.
 fn create_load_test_future(
-    config: configv2::LoadTest,
+    config: LoadTest,
     run_config: RunConfig,
     test_ended_tx: broadcast::Sender<Result<TestEndReason, TestError>>,
     providers: Arc<BTreeMap<String, providers::Provider>>,
@@ -1060,7 +1060,7 @@ fn create_load_test_future(
             {
                 let mut mod_interval2 = ModInterval::new();
                 for piece in load_pattern {
-                    use configv2::load_pattern::LoadPatternSingle;
+                    use config::load_pattern::LoadPatternSingle;
                     let (from, to, over) = match piece {
                         LoadPatternSingle::Linear { from, to, over } => (
                             PerX::minute(**peak_load.get() * **from.get()),
@@ -1135,7 +1135,7 @@ pub(crate) fn create_http_client(
 type ProvidersResult = Result<(BTreeMap<String, providers::Provider>, BTreeSet<String>), TestError>;
 
 fn get_providers_from_config(
-    config_providers: &BTreeMap<String, configv2::ProviderType>,
+    config_providers: &BTreeMap<String, config::ProviderType>,
     auto_size: usize,
     test_ended_tx: &broadcast::Sender<Result<TestEndReason, TestError>>,
     config_path: &Path,
@@ -1143,7 +1143,7 @@ fn get_providers_from_config(
     let mut providers = BTreeMap::new();
     let mut response_providers = BTreeSet::new();
     for (name, template) in config_providers {
-        use configv2::providers::ProviderType;
+        use config::providers::ProviderType;
         let provider = match template.clone() {
             ProviderType::Range(rg) => providers::range(rg, name),
             ProviderType::List(lp) => providers::list(lp, name),
@@ -1162,7 +1162,7 @@ fn get_providers_from_config(
 }
 
 fn get_loggers_from_config(
-    config_loggers: BTreeMap<String, configv2::Logger>,
+    config_loggers: BTreeMap<String, config::Logger>,
     results_dir: Option<&PathBuf>,
     test_ended_tx: &broadcast::Sender<Result<TestEndReason, TestError>>,
     stdout: &FCSender<MsgType>,
