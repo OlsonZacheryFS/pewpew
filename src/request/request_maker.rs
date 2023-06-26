@@ -128,7 +128,7 @@ impl RequestMaker {
             .evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/);
         let url = match url {
             Ok(u) => u,
-            Err(e) => todo!(), //return future::ready(Err(e.into())).a(),
+            Err(e) => return future::ready(Err(e.into())).a(),
         };
         let url = match url::Url::parse(&url) {
             Ok(u) => u,

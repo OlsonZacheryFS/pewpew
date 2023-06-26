@@ -1,22 +1,28 @@
 use boa_engine::JsValue;
-use std::error::Error as SError;
+use std::{error::Error as SError, sync::Arc};
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum LoadTestGenError {
     #[error("error parsing yaml: {0}")]
-    YamlParse(#[from] serde_yaml::Error),
+    YamlParse(#[from] Arc<serde_yaml::Error>),
     #[error("{0}")]
     MissingEnvVar(#[from] MissingEnvVar),
     #[error("error inserting static vars: {0}")]
     VarsError(#[from] VarsError),
 }
 
-#[derive(Debug, Error)]
+impl From<serde_yaml::Error> for LoadTestGenError {
+    fn from(value: serde_yaml::Error) -> Self {
+        Arc::new(value).into()
+    }
+}
+
+#[derive(Debug, Error, Clone)]
 #[error("missing environment variable {0}")]
 pub struct MissingEnvVar(pub(crate) String);
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum VarsError {
     #[error("var at path \"{0}\" not found")]
     VarNotFound(String),
@@ -25,13 +31,13 @@ pub enum VarsError {
         typename: &'static str,
         from: String,
         #[source]
-        error: Box<dyn SError>,
+        error: Arc<dyn SError + Send + Sync + 'static>,
     },
     #[error("{0}")]
     CreateExpr(#[from] CreateExprError),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum CreateExprError {
     #[error("failure building JS function: {0}")]
     BuildFnFailure(String),

@@ -29,6 +29,7 @@ use std::{
     error::Error as StdError,
     iter::FromIterator,
     str::FromStr,
+    sync::Arc,
 };
 use thiserror::Error;
 
@@ -46,7 +47,7 @@ pub enum Template<
     VD: Bool, /* = <<T as TemplateType>::VarsAllowed as Bool>::Inverse*/
     ED: Bool = <<T as TemplateType>::EnvsAllowed as Bool>::Inverse,
 > where
-    <V as FromStr>::Err: StdError + 'static,
+    <V as FromStr>::Err: StdError + Send + Sync + 'static,
 {
     Literal {
         value: V,
@@ -74,7 +75,7 @@ pub enum Template<
 impl<V, T, VD, ED> Clone for Template<V, T, VD, ED>
 where
     V: FromStr + Clone,
-    V::Err: StdError,
+    V::Err: StdError + Send + Sync + 'static,
     T: TemplateType,
     <T::ProvAllowed as Bool>::Inverse: OK,
     VD: Bool,
@@ -133,7 +134,7 @@ where
 impl<V, T, VD: Bool, ED: Bool> TryFrom<TemplatedString<T>> for Template<V, T, VD, ED>
 where
     V: FromStr,
-    V::Err: StdError,
+    V::Err: StdError + Send + Sync + 'static,
     T: TemplateType,
 {
     type Error = TemplateGenError<V>;
@@ -168,7 +169,7 @@ where
                                             super::VarsError::InvalidString {
                                                 typename: std::any::type_name::<V>(),
                                                 from: s,
-                                                error: e.into(),
+                                                error: Arc::new(e),
                                             }
                                         })
                                         .map(|v| Template::Literal { value: v }),
@@ -182,7 +183,7 @@ where
                                         super::VarsError::InvalidString {
                                             typename: std::any::type_name::<V>(),
                                             from: s,
-                                            error: e.into(),
+                                            error: Arc::new(e),
                                         }
                                     })
                                     .map(|v| Template::Literal { value: v })
@@ -319,7 +320,7 @@ impl<VD: Bool> Template<String, EnvsOnly, VD, False> {
 impl<V: FromStr, T: TemplateType> Template<V, T, True, True>
 where
     <T::ProvAllowed as Bool>::Inverse: OK,
-    <V as FromStr>::Err: StdError,
+    <V as FromStr>::Err: StdError + Send + Sync + 'static,
 {
     pub fn get(&self) -> &V {
         match self {
@@ -342,7 +343,7 @@ where
     T: TemplateType,
     VD: Bool,
     ED: Bool,
-    V::Err: StdError,
+    V::Err: StdError + Send + Sync + 'static,
 {
     pub fn new_literal(value: V) -> Self {
         Self::Literal { value }
@@ -352,7 +353,7 @@ where
 impl<V: FromStr, T: TemplateType> PropagateVars for Template<V, T, False, True>
 where
     T::VarsAllowed: OK,
-    V::Err: StdError + 'static,
+    V::Err: StdError + Send + Sync + 'static,
 {
     type Residual = Template<V, T, True, True>;
 
