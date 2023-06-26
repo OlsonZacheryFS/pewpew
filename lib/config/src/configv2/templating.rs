@@ -25,7 +25,6 @@ use std::{
     error::Error as StdError,
     iter::FromIterator,
     str::FromStr,
-    sync::{Arc, Mutex},
 };
 use thiserror::Error;
 
@@ -33,7 +32,7 @@ mod parser;
 
 use parser::Segment;
 
-#[derive(Deserialize, PartialEq, Eq, Clone, Derivative)]
+#[derive(Deserialize, PartialEq, Eq, Derivative)]
 #[derivative(Debug)]
 #[serde(try_from = "TemplatedString<T>")]
 #[serde(bound = "")]
@@ -68,10 +67,45 @@ pub enum Template<
     },
 }
 
-#[derive(Debug, Clone)]
+impl<V, T, VD, ED> Clone for Template<V, T, VD, ED>
+where
+    V: FromStr + Clone,
+    V::Err: StdError,
+    T: TemplateType,
+    <T::ProvAllowed as Bool>::Inverse: OK,
+    VD: Bool,
+    ED: Bool,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::Literal { value } => Self::Literal {
+                value: value.clone(),
+            },
+            Self::Env {
+                template,
+                __dontuse,
+            } => Self::Env {
+                template: template.clone(),
+                __dontuse: *__dontuse,
+            },
+            Self::PreVars {
+                template,
+                next,
+                __dontuse,
+            } => Self::PreVars {
+                template: template.clone(),
+                next: *next,
+                __dontuse: *__dontuse,
+            },
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum ExprSegment {
     Str(String),
-    Eval(Arc<Mutex<EvalExpr>>),
+    Eval(EvalExpr),
 }
 
 impl PartialEq for ExprSegment {

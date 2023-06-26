@@ -6,7 +6,7 @@ use derive_more::{Deref, From};
 use serde::Deserialize;
 use std::{convert::TryFrom, str::FromStr, time::Duration as SDur};
 
-#[derive(Debug, Deserialize, Clone, Deref, PartialEq, Eq, From)]
+#[derive(Debug, Deserialize, Deref, PartialEq, Eq, From)]
 pub struct Headers<VD: Bool>(
     #[serde(with = "tuple_vec_map")]
     #[serde(default = "Vec::new")]

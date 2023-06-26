@@ -7,7 +7,7 @@ use super::{
 };
 use serde::Deserialize;
 
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct Config<VD: Bool = True> {
     pub client: Client<VD>,
     pub general: General,
@@ -25,7 +25,7 @@ impl PropagateVars for Config<False> {
 }
 
 /// Customization Parameters for the HTTP client
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct Client<VD: Bool> {
     #[serde(default = "default_timeout")]
     pub request_timeout: Duration,
