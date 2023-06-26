@@ -1,8 +1,8 @@
 use super::select_parser::{bool_value, f64_value, RequiredProviders, Value, ValueOrExpression};
 
-use crate::error::{CreatingExpressionError, ExecutingExpressionError};
-use crate::json_value_to_string;
-use crate::select_parser::ProviderStream;
+use super::error::{CreatingExpressionError, ExecutingExpressionError};
+use super::json_value_to_string;
+use super::select_parser::ProviderStream;
 
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
 use ether::{Either, Either3, EitherExt};

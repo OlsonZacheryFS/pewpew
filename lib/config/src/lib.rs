@@ -1,5 +1,5 @@
-//pub mod configv1;
-//pub use configv1::*;
+#[cfg(feature = "legacy")]
+pub mod configv1;
 
 mod configv2;
 pub use configv2::*;
