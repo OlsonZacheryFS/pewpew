@@ -1,4 +1,7 @@
-use super::templating::{Segment, TemplateType, True, OK};
+use super::{
+    error::{CreateExprError, EvalExprError, IntoStreamError},
+    templating::{Segment, TemplateType, True, OK},
+};
 use boa_engine::{
     object::{JsFunction, ObjectInitializer},
     prelude::*,
@@ -14,7 +17,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     error::Error as StdError,
 };
-use thiserror::Error;
 use zip_all::zip_all_map;
 
 pub type ProviderStreamStream<Ar, E> =
@@ -157,24 +159,6 @@ impl EvalExpr {
                 .and_then(|_, (ctx, efn)| Self::eval_raw(&mut ctx.borrow_mut(), efn, values))
         }))
     }
-}
-
-#[derive(Debug, Error)]
-pub enum CreateExprError {
-    #[error("failure building JS function: {}", .0.display())]
-    BuildFnFailure(JsValue),
-}
-
-#[derive(Debug, Error)]
-pub enum IntoStreamError {
-    #[error("missing provider: {0}")]
-    MissingProvider(String),
-}
-
-#[derive(Debug, Error)]
-enum EvalExprError {
-    #[error("provider returned invalid json: {}", .0.display())]
-    InvalidJsonFromProvider(JsValue),
 }
 
 #[cfg(test)]

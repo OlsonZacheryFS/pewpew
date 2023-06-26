@@ -1,16 +1,17 @@
 #![allow(dead_code)]
 
-use self::templating::{Bool, EnvsOnly, False, MissingEnvVar, Template, True};
+use self::error::{LoadTestGenError, MissingEnvVar, VarsError};
+use self::templating::{Bool, EnvsOnly, False, Template, True};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashMap},
     hash::Hash,
     path::PathBuf,
 };
-use thiserror::Error;
 
 pub mod config;
 pub mod endpoints;
+pub mod error;
 pub mod load_pattern;
 pub mod loggers;
 pub mod providers;
@@ -104,16 +105,6 @@ impl VarValue<False> {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum LoadTestGenError {
-    #[error("error parsing yaml: {0}")]
-    YamlParse(#[from] serde_yaml::Error),
-    #[error("{0}")]
-    MissingEnvVar(#[from] MissingEnvVar),
-    #[error("error inserting static vars: {0}")]
-    VarsError(#[from] VarsError),
-}
-
 impl LoadTest<True, True> {
     pub fn from_yaml(
         yaml: &str,
@@ -169,19 +160,6 @@ impl LoadTest<False, False> {
             endpoints,
         })
     }
-}
-
-#[derive(Debug, Error)]
-pub enum VarsError {
-    #[error("var at path \"{0}\" not found")]
-    VarNotFound(String),
-    #[error("resulting string \"{from}\", was not a valid {typename} ({error})")]
-    InvalidString {
-        typename: &'static str,
-        from: String,
-        #[source]
-        error: Box<dyn std::error::Error>,
-    },
 }
 
 /// Trait for inserting static Vars into Templates. Any type in the config should implement this

@@ -11,7 +11,11 @@
 //! For example: `Template<_, EnvsOnly>` cannot be instantiated in the PreVars variant, because the
 //! associated type is False.
 
-use super::{scripting::EvalExpr, PropagateVars};
+use super::{
+    error::{MissingEnvVar, VarsError},
+    scripting::EvalExpr,
+    PropagateVars,
+};
 use derivative::Derivative;
 use ether::{Either, Either3};
 use futures::{Stream, TryStreamExt};
@@ -347,7 +351,7 @@ where
 {
     type Residual = Template<V, T, True, True>;
 
-    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
+    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, VarsError> {
         match self {
             Self::Literal { value } => Ok(Template::Literal { value }),
             Self::PreVars {
@@ -362,10 +366,6 @@ where
         }
     }
 }
-
-#[derive(Debug, Error)]
-#[error("missing environment variable {0}")]
-pub struct MissingEnvVar(String);
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Clone)]
 #[serde(try_from = "&str")]
