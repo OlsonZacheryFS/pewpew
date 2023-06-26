@@ -12,7 +12,7 @@
 //! associated type is False.
 
 use super::{
-    error::{EvalExprError, IntoStreamError, MissingEnvVar, VarsError},
+    error::{CreateExprError, EvalExprError, IntoStreamError, MissingEnvVar, VarsError},
     scripting::EvalExpr,
     PropagateVars,
 };
@@ -159,7 +159,7 @@ where
                                 let s = s.collapse();
                                 match s.clone().try_collect() {
                                     None => Ok(Template::NeedsProviders {
-                                        script: s.as_regular().unwrap().into_script(),
+                                        script: s.as_regular().unwrap().into_script()?,
                                         __dontuse: TryDefault::try_default().unwrap(),
                                     }),
                                     Some(s) => s
@@ -432,16 +432,18 @@ impl<T: TemplateType> TemplatedString<T> {
     }
 
     // only call after Vars insertion
-    fn into_script(self) -> Vec<ExprSegment>
+    fn into_script(self) -> Result<Vec<ExprSegment>, CreateExprError>
     where
         T::ProvAllowed: OK,
     {
         self.into_iter()
-            .map(|s| match s {
-                Segment::Raw(x) => ExprSegment::Str(x),
-                Segment::Prov(p, _) => ExprSegment::ProvDirect(p),
-                Segment::Expr(x, _) => ExprSegment::Eval(EvalExpr::from_template(x).expect("TODO")),
-                _ => unreachable!(),
+            .map(|s| {
+                Ok(match s {
+                    Segment::Raw(x) => ExprSegment::Str(x),
+                    Segment::Prov(p, _) => ExprSegment::ProvDirect(p),
+                    Segment::Expr(x, _) => ExprSegment::Eval(EvalExpr::from_template(x)?),
+                    _ => unreachable!(),
+                })
             })
             .collect()
     }

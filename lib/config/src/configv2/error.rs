@@ -27,6 +27,8 @@ pub enum VarsError {
         #[source]
         error: Box<dyn SError>,
     },
+    #[error("{0}")]
+    CreateExpr(#[from] CreateExprError),
 }
 
 #[derive(Debug, Error)]
