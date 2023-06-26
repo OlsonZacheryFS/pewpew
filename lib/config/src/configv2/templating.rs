@@ -13,8 +13,8 @@
 
 use super::{scripting::EvalExpr, PropagateVars};
 use derivative::Derivative;
-use ether::Either;
-use futures::Stream;
+use ether::{Either, Either3};
+use futures::{Stream, TryStreamExt};
 pub use helpers::*;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -30,7 +30,7 @@ use thiserror::Error;
 
 mod parser;
 
-use parser::Segment;
+pub use parser::Segment;
 
 #[derive(Deserialize, PartialEq, Eq, Derivative)]
 #[derivative(Debug)]
@@ -105,6 +105,7 @@ where
 #[derive(Debug)]
 pub enum ExprSegment {
     Str(String),
+    ProvDirect(String),
     Eval(EvalExpr),
 }
 
@@ -154,7 +155,7 @@ where
                                 let s = s.collapse();
                                 match s.clone().try_collect() {
                                     None => Ok(Template::NeedsProviders {
-                                        script: s.into_script(),
+                                        script: s.as_regular().unwrap().into_script(),
                                         __dontuse: TryDefault::try_default().unwrap(),
                                     }),
                                     Some(s) => s
@@ -198,27 +199,41 @@ where
 {
     pub fn into_stream<P, Ar, E>(
         self,
-        p: &BTreeMap<String, P>,
+        providers: &BTreeMap<String, P>,
     ) -> impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static
     where
         P: super::scripting::ProviderStream<Ar, Err = E> + 'static,
         Ar: Clone + Send + Unpin + 'static,
         E: StdError + Send + Clone + Unpin + 'static,
     {
+        use futures::stream::repeat;
         match self {
-            Self::Literal { value } => Either::A(futures::stream::repeat(Ok((
+            Self::Literal { value } => Either::A(repeat(Ok((
                 serde_json::Value::String(value),
                 vec![], // TODO: what is the Vec<Ar> for?
             )))),
-            Self::NeedsProviders { script, .. } => Either::B(
-                super::scripting::EvalExpr::from_template(Self::NeedsProviders {
-                    script,
-                    __dontuse: TryDefault::try_default().unwrap(),
-                })
-                .unwrap()
-                .into_stream(p)
-                .unwrap(),
-            ),
+            Self::NeedsProviders { script, .. } => {
+                let streams = script.into_iter().map(|s| match s {
+                    ExprSegment::Str(s) => {
+                        Either3::A(repeat(Ok((serde_json::Value::String(s), vec![]))))
+                    }
+                    ExprSegment::ProvDirect(p) => {
+                        Either3::B(providers.get(&p).map(|p| p.as_stream()).expect("TODO"))
+                    }
+                    ExprSegment::Eval(x) => Either3::C(x.into_stream(providers).expect("TODO")),
+                });
+                Either::B(zip_all::zip_all(streams).map_ok(|js| {
+                    js.into_iter()
+                        .map(|(j, ar)| (j.to_string(), ar))
+                        .reduce(|mut acc, e| {
+                            acc.0.push_str(&e.0);
+                            acc.1.extend(e.1);
+                            acc
+                        })
+                        .map(|(s, ar)| (serde_json::Value::String(s), ar))
+                        .unwrap_or_default()
+                }))
+            }
             _ => unreachable!(),
         }
     }
@@ -239,12 +254,14 @@ where
             Self::Literal { .. } => BTreeSet::new(),
             Self::NeedsProviders { script, .. } => script
                 .iter()
-                .filter_map(
-                    |p| todo!(), /*match p {
-                                     Segment::Prov(p, ..) => Some(p.clone()),
-                                     _ => None,
-                                 }*/
-                )
+                .flat_map(|p| match p {
+                    ExprSegment::Eval(x) => x.required_providers().into_iter().collect_vec(),
+                    ExprSegment::ProvDirect(p) => vec![p.as_str()],
+                    ExprSegment::Str(_) => vec![],
+                })
+                .collect::<BTreeSet<&str>>()
+                .into_iter()
+                .map(ToOwned::to_owned)
                 .collect(),
             _ => unreachable!(),
         }
@@ -373,8 +390,37 @@ impl<T: TemplateType> TemplatedString<T> {
         self.0.iter()
     }
 
-    fn into_script(self) -> Vec<ExprSegment> {
-        todo!()
+    fn as_regular(self) -> Option<TemplatedString<Regular>> {
+        fn map_segment<T: TemplateType, I: Bool>(s: Segment<T, I>) -> Option<Segment<Regular, I>> {
+            Some(match s {
+                Segment::Raw(s) => Segment::Raw(s),
+                Segment::Expr(x, _) => Segment::Expr(
+                    x.into_iter().map(map_segment).collect::<Option<_>>()?,
+                    TryDefault::try_default()?,
+                ),
+                Segment::Prov(p, _) => Segment::Prov(p, TryDefault::try_default()?),
+                Segment::Env(e, _) => Segment::Env(e, TryDefault::try_default()?),
+                Segment::Var(v, _) => Segment::Var(v, TryDefault::try_default()?),
+            })
+        }
+        self.into_iter()
+            .map(map_segment)
+            .collect::<Option<TemplatedString<Regular>>>()
+    }
+
+    // only call after Vars insertion
+    fn into_script(self) -> Vec<ExprSegment>
+    where
+        T::ProvAllowed: OK,
+    {
+        self.into_iter()
+            .map(|s| match s {
+                Segment::Raw(x) => ExprSegment::Str(x),
+                Segment::Prov(p, _) => ExprSegment::ProvDirect(p),
+                Segment::Expr(x, _) => ExprSegment::Eval(EvalExpr::from_template(x).expect("TODO")),
+                _ => unreachable!(),
+            })
+            .collect()
     }
 }
 

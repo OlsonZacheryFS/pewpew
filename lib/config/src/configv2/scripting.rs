@@ -1,4 +1,4 @@
-use super::templating::{Template, TemplateType, True, OK};
+use super::templating::{Segment, TemplateType, True, OK};
 use boa_engine::{
     object::{JsFunction, ObjectInitializer},
     prelude::*,
@@ -8,7 +8,10 @@ use derivative::Derivative;
 use diplomatic_bag::DiplomaticBag;
 use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
-use std::{cell::OnceCell, collections::BTreeMap};
+use std::{
+    cell::OnceCell,
+    collections::{BTreeMap, BTreeSet},
+};
 use thiserror::Error;
 use zip_all::zip_all_map;
 
@@ -30,38 +33,27 @@ pub struct EvalExpr {
 }
 
 impl EvalExpr {
-    pub fn from_template<T>(
-        template: Template<String, T, True, True>,
-    ) -> Result<Self, CreateExprError>
+    pub fn from_template<T>(script: Vec<Segment<T, True>>) -> Result<Self, CreateExprError>
     where
         T: TemplateType,
         T::ProvAllowed: OK,
     {
-        let Template::NeedsProviders { script, .. } = template else {
-            return Err(CreateExprError::LiteralForTemplate);
-        };
-
         let mut needed = Vec::new();
         let uses_p = OnceCell::new();
         let script = format!(
             "function ____eval(____provider_values){{ return {}; }}",
             script
                 .into_iter()
-                .map(
-                    |_| {
-                        todo!();
-                        ""
-                    } /*|p| match p {
-                          TemplatePiece::Raw(s) => s,
-                          TemplatePiece::Provider(p, ..) => {
-                              let s = format!("____provider_values.{p}");
-                              let _ = uses_p.set(true);
-                              needed.push(p);
-                              s
-                          }
-                          _ => unreachable!(),
-                      }*/
-                )
+                .map(|s| match s {
+                    Segment::Raw(s) => s,
+                    Segment::Prov(p, ..) => {
+                        let s = format!("____provider_values.{p}");
+                        let _ = uses_p.set(true);
+                        needed.push(p);
+                        s
+                    }
+                    _ => unreachable!(),
+                })
                 .collect::<String>()
         );
         if !uses_p.into_inner().unwrap_or(false) {
@@ -82,6 +74,10 @@ impl EvalExpr {
             }),
             needed,
         })
+    }
+
+    pub fn required_providers(&self) -> BTreeSet<&str> {
+        self.needed.iter().map(|s| s.as_str()).collect()
     }
 
     pub fn into_stream<P, Ar, E>(
@@ -140,8 +136,6 @@ impl EvalExpr {
 
 #[derive(Debug, Error)]
 pub enum CreateExprError {
-    #[error("template provided was an already evaluated literal value")]
-    LiteralForTemplate,
     #[error("failure building JS function: {}", .0.display())]
     BuildFnFailure(JsValue),
 }
