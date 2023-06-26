@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use self::error::{LoadTestGenError, MissingEnvVar, VarsError};
 use self::templating::{Bool, EnvsOnly, False, Template, True};
 use serde::Deserialize;
