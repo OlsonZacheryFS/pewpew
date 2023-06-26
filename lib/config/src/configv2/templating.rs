@@ -12,7 +12,7 @@
 //! associated type is False.
 
 use super::{
-    error::{EvalExprError, MissingEnvVar, VarsError},
+    error::{EvalExprError, IntoStreamError, MissingEnvVar, VarsError},
     scripting::EvalExpr,
     PropagateVars,
 };
@@ -204,28 +204,36 @@ where
     pub fn into_stream<P, Ar, E>(
         self,
         providers: &BTreeMap<String, P>,
-    ) -> impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static
+    ) -> Result<
+        impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static,
+        IntoStreamError,
+    >
     where
         P: super::scripting::ProviderStream<Ar, Err = E> + 'static,
         Ar: Clone + Send + Unpin + 'static,
         E: StdError + Send + Clone + Unpin + 'static + From<EvalExprError>,
     {
         use futures::stream::repeat;
-        match self {
+        Ok(match self {
             Self::Literal { value } => Either::A(repeat(Ok((
                 serde_json::Value::String(value),
                 vec![], // TODO: what is the Vec<Ar> for?
             )))),
             Self::NeedsProviders { script, .. } => {
-                let streams = script.into_iter().map(|s| match s {
-                    ExprSegment::Str(s) => {
-                        Either3::A(repeat(Ok((serde_json::Value::String(s), vec![]))))
-                    }
-                    ExprSegment::ProvDirect(p) => {
-                        Either3::B(providers.get(&p).map(|p| p.as_stream()).expect("TODO"))
-                    }
-                    ExprSegment::Eval(x) => Either3::C(x.into_stream(providers).expect("TODO")),
-                });
+                let streams = script
+                    .into_iter()
+                    .map(|s| match s {
+                        ExprSegment::Str(s) => Ok(Either3::A(repeat(Ok((
+                            serde_json::Value::String(s),
+                            vec![],
+                        ))))),
+                        ExprSegment::ProvDirect(p) => providers
+                            .get(&p)
+                            .map(|p| Either3::B(p.as_stream()))
+                            .ok_or(IntoStreamError::MissingProvider(p)),
+                        ExprSegment::Eval(x) => x.into_stream(providers).map(Either3::C),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
                 Either::B(zip_all::zip_all(streams).map_ok(|js| {
                     js.into_iter()
                         .map(|(j, ar)| (j.to_string(), ar))
@@ -239,7 +247,7 @@ where
                 }))
             }
             _ => unreachable!(),
-        }
+        })
     }
 
     pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, Box<dyn StdError>> {
