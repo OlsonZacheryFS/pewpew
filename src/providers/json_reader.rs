@@ -151,10 +151,7 @@ impl Iterator for JsonReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use config::{
-        providers::{BufferLimit, FileProvider, FileReadFormat},
-        templating::Template,
-    };
+    use config::providers::{FileProvider, FileReadFormat};
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -166,15 +163,7 @@ mod tests {
 
     #[test]
     fn json_reader_basics_works() {
-        let fp = FileProvider {
-            path: Template::new_literal("".into()),
-            repeat: false,
-            unique: false,
-            auto_return: None,
-            buffer: BufferLimit::Auto,
-            format: FileReadFormat::Json,
-            random: false,
-        };
+        let fp = FileProvider::default_with_format(FileReadFormat::Json);
 
         let expect = vec![
             json::json!({ "foo": 1 }),

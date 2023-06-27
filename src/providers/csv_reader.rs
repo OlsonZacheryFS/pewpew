@@ -166,10 +166,7 @@ impl Iterator for CsvReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use config::{
-        providers::{BufferLimit, CsvParams, FileProvider, FileReadFormat},
-        templating::Template,
-    };
+    use config::providers::{CsvParams, FileProvider, FileReadFormat};
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -186,15 +183,7 @@ mod tests {
             terminator: None,
             quote: None,
         };
-        let fp = FileProvider {
-            path: Template::new_literal("".into()),
-            repeat: false,
-            unique: false,
-            auto_return: None,
-            buffer: BufferLimit::Auto,
-            format: FileReadFormat::Csv(csvp.clone()),
-            random: false,
-        };
+        let fp = FileProvider::default_with_format(FileReadFormat::Csv(csvp.clone()));
 
         let expect = vec![
             json::json!(["a", "b", "c"]),

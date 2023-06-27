@@ -166,10 +166,7 @@ impl Iterator for LineReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use config::{
-        providers::{BufferLimit, FileProvider, FileReadFormat},
-        templating::Template,
-    };
+    use config::providers::{FileProvider, FileReadFormat};
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -183,15 +180,7 @@ mod tests {
 
     #[test]
     fn line_reader_basics_works() {
-        let fp = FileProvider {
-            path: Template::new_literal("".into()),
-            repeat: false,
-            unique: false,
-            auto_return: None,
-            buffer: BufferLimit::Auto,
-            format: FileReadFormat::Json,
-            random: false,
-        };
+        let fp = FileProvider::default_with_format(FileReadFormat::Line);
 
         let expect = vec![
             json::json!([1, 2, 3]),
@@ -219,15 +208,7 @@ mod tests {
     fn lines_longer_than_buffer_work() {
         let long_line = format!("{}{}", "a".repeat(KB8), "b".repeat(10));
         let long_lines = [long_line.clone(), long_line];
-        let fp = FileProvider {
-            path: Template::new_literal("".into()),
-            repeat: false,
-            unique: false,
-            auto_return: None,
-            buffer: BufferLimit::Auto,
-            format: FileReadFormat::Json,
-            random: false,
-        };
+        let fp = FileProvider::default_with_format(FileReadFormat::Line);
 
         let expect = vec![json::json!(long_lines[0]), json::json!(long_lines[1])];
 
@@ -247,15 +228,7 @@ mod tests {
 
     #[test]
     fn line_reader_repeat_random_works() {
-        let mut fp = FileProvider {
-            path: Template::new_literal("".into()),
-            repeat: false,
-            unique: false,
-            auto_return: None,
-            buffer: BufferLimit::Auto,
-            format: FileReadFormat::Json,
-            random: false,
-        };
+        let mut fp = FileProvider::default_with_format(FileReadFormat::Line);
         fp.random = true;
         fp.repeat = true;
 

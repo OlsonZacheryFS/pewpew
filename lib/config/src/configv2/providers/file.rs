@@ -22,6 +22,21 @@ pub struct FileProvider<VD: Bool = True> {
     pub random: bool,
 }
 
+impl FileProvider<True> {
+    /// Used for testing
+    pub fn default_with_format(format: FileReadFormat) -> Self {
+        Self {
+            path: Template::new_literal("".into()),
+            repeat: false,
+            unique: false,
+            auto_return: None,
+            buffer: BufferLimit::Auto,
+            format,
+            random: false,
+        }
+    }
+}
+
 impl PropagateVars for FileProvider<False> {
     type Data<VD: Bool> = FileProvider<VD>;
 
