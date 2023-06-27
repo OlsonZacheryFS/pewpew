@@ -14,9 +14,12 @@ pub struct Config<VD: Bool = True> {
 }
 
 impl PropagateVars for Config<False> {
-    type Residual = Config<True>;
+    type Data<VD: Bool> = Config<VD>;
 
-    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
+    fn insert_vars(
+        self,
+        vars: &super::VarValue<True>,
+    ) -> Result<Self::Data<True>, super::VarsError> {
         Ok(Config {
             client: self.client.insert_vars(vars)?,
             general: self.general,
@@ -36,9 +39,12 @@ pub struct Client<VD: Bool> {
 }
 
 impl PropagateVars for Client<False> {
-    type Residual = Client<True>;
+    type Data<VD: Bool> = Client<VD>;
 
-    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
+    fn insert_vars(
+        self,
+        vars: &super::VarValue<True>,
+    ) -> Result<Self::Data<True>, super::VarsError> {
         let Self {
             request_timeout,
             headers,

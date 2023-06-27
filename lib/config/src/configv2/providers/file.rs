@@ -23,12 +23,12 @@ pub struct FileProvider<VD: Bool = True> {
 }
 
 impl PropagateVars for FileProvider<False> {
-    type Residual = FileProvider<True>;
+    type Data<VD: Bool> = FileProvider<VD>;
 
     fn insert_vars(
         self,
         vars: &crate::configv2::VarValue<True>,
-    ) -> Result<Self::Residual, crate::configv2::VarsError> {
+    ) -> Result<Self::Data<True>, crate::configv2::VarsError> {
         let Self {
             path,
             repeat,

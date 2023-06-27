@@ -26,9 +26,12 @@ impl<VD: Bool> Default for Headers<VD> {
 }
 
 impl PropagateVars for Headers<False> {
-    type Residual = Headers<True>;
+    type Data<VD: Bool> = Headers<VD>;
 
-    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
+    fn insert_vars(
+        self,
+        vars: &super::VarValue<True>,
+    ) -> Result<Self::Data<True>, super::VarsError> {
         self.0
             .into_iter()
             .map(|(n, h)| Ok((n, h.insert_vars(vars)?)))

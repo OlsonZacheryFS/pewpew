@@ -355,9 +355,9 @@ where
     T::VarsAllowed: OK,
     V::Err: StdError + Send + Sync + 'static,
 {
-    type Residual = Template<V, T, True, True>;
+    type Data<VD: Bool> = Template<V, T, VD, True>;
 
-    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, VarsError> {
+    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Data<True>, VarsError> {
         match self {
             Self::Literal { value } => Ok(Template::Literal { value }),
             Self::PreVars {
@@ -469,9 +469,12 @@ impl<T: TemplateType> PropagateVars for TemplatedString<T>
 where
     T::VarsAllowed: OK,
 {
-    type Residual = Self;
+    type Data<VD: Bool> = Self;
 
-    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
+    fn insert_vars(
+        self,
+        vars: &super::VarValue<True>,
+    ) -> Result<Self::Data<True>, super::VarsError> {
         self.0
             .into_iter()
             .map(|p| match p {

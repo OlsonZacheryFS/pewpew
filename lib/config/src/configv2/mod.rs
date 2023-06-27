@@ -168,16 +168,16 @@ impl LoadTest<False, False> {
 /// Trait for inserting static Vars into Templates. Any type in the config should implement this
 /// trait
 trait PropagateVars {
-    // should be same generic type, but with VD as True
-    type Residual;
+    /// Data<False> should be Self
+    type Data<VD: Bool>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Residual, VarsError>;
+    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError>;
 }
 
 impl PropagateVars for LoadTest<False, True> {
-    type Residual = LoadTest<True, True>;
+    type Data<VD: Bool> = LoadTest<VD, True>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Residual, VarsError> {
+    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
         let Self {
             config,
             load_pattern,
@@ -203,9 +203,9 @@ where
     K: Ord,
     V: PropagateVars,
 {
-    type Residual = BTreeMap<K, V::Residual>;
+    type Data<VD: Bool> = BTreeMap<K, V::Data<VD>>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Residual, VarsError> {
+    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
         self.into_iter()
             .map(|(k, v)| Ok((k, v.insert_vars(vars)?)))
             .collect()
@@ -217,9 +217,9 @@ where
     K: Eq + Hash,
     V: PropagateVars,
 {
-    type Residual = HashMap<K, V::Residual>;
+    type Data<VD: Bool> = HashMap<K, V::Data<VD>>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Residual, VarsError> {
+    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
         self.into_iter()
             .map(|(k, v)| Ok((k, v.insert_vars(vars)?)))
             .collect()
@@ -230,9 +230,9 @@ impl<T> PropagateVars for Vec<T>
 where
     T: PropagateVars,
 {
-    type Residual = Vec<T::Residual>;
+    type Data<VD: Bool> = Vec<T::Data<VD>>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Residual, VarsError> {
+    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
         self.into_iter().map(|x| x.insert_vars(vars)).collect()
     }
 }
@@ -241,20 +241,21 @@ impl<T> PropagateVars for Option<T>
 where
     T: PropagateVars,
 {
-    type Residual = Option<T::Residual>;
+    type Data<VD: Bool> = Option<T::Data<VD>>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Residual, VarsError> {
+    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
         self.map(|t| t.insert_vars(vars)).transpose()
     }
 }
 
+// used for the serde tuple vec map
 impl<T, U> PropagateVars for (T, U)
 where
     U: PropagateVars,
 {
-    type Residual = (T, U::Residual);
+    type Data<VD: Bool> = (T, U::Data<VD>);
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Residual, VarsError> {
+    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
         Ok((self.0, self.1.insert_vars(vars)?))
     }
 }

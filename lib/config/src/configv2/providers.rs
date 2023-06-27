@@ -34,9 +34,12 @@ pub struct ResponseProvider {
 }
 
 impl PropagateVars for ProviderType<False> {
-    type Residual = ProviderType<True>;
+    type Data<VD: Bool> = ProviderType<VD>;
 
-    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Residual, super::VarsError> {
+    fn insert_vars(
+        self,
+        vars: &super::VarValue<True>,
+    ) -> Result<Self::Data<True>, super::VarsError> {
         match self {
             Self::File(fp) => fp.insert_vars(vars).map(ProviderType::File),
             Self::Range(r) => Ok(ProviderType::Range(r)),
