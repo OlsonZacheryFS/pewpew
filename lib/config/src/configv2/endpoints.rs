@@ -89,6 +89,12 @@ impl Endpoint<True> {
             .chain(self.url.get_required_providers().into_iter())
             .collect()
     }
+
+    /// Insert a load pattern if the current is None. The globally defined load_pattern should be
+    /// used as a default if one is not defined locally.
+    pub(crate) fn insert_load_pattern(&mut self, load: &LoadPattern<True>) {
+        self.load_pattern.get_or_insert_with(|| load.clone());
+    }
 }
 
 impl Endpoint<False> {

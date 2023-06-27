@@ -116,7 +116,12 @@ impl LoadTest<True, True> {
             .iter_mut()
             .for_each(|e| e.insert_path(file_path));
         let vars = VarValue::Nested(std::mem::take(&mut pre_vars.vars));
-        Ok(pre_vars.insert_vars(&vars)?)
+        let mut lt = pre_vars.insert_vars(&vars)?;
+        let lp = &lt.load_pattern;
+        let ep = &mut lt.endpoints;
+        ep.iter_mut().for_each(|e| e.insert_load_pattern(lp));
+
+        Ok(lt)
     }
 
     pub fn clear_loggers(&mut self) {

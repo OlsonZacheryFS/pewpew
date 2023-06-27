@@ -67,7 +67,7 @@ impl TryFrom<&str> for Percent {
 }
 
 /// Defines the load pattern of how heavily pewpew should be hitting the endpoints over time.
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 #[serde(from = "Vec<LoadPatternTemp>")]
 #[serde(bound = "Self: From<Vec<LoadPatternTemp>>")]
 pub struct LoadPattern<VD: Bool>(Vec<LoadPatternSingle<VD>>);
