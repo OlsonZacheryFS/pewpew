@@ -151,9 +151,12 @@ impl Iterator for JsonReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
-
+    use config::{
+        providers::{BufferLimit, FileProvider, FileReadFormat},
+        templating::Template,
+    };
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     const JSON_LINES: &[&str] = &[
         r#"{ "foo": 1 }"#,
@@ -162,15 +165,16 @@ mod tests {
     ];
 
     #[test]
-    fn fix_json_reader_test() {
-        todo!("FIX THE JSON READER TEST")
-    }
-
-    /*
-    #[test]
     fn json_reader_basics_works() {
-        let mut fp = config::FileProvider::default();
-        fp.format = config::FileFormat::Json;
+        let fp = FileProvider {
+            path: Template::new_literal("".into()),
+            repeat: false,
+            unique: false,
+            auto_return: None,
+            buffer: BufferLimit::Auto,
+            format: FileReadFormat::Json,
+            random: false,
+        };
 
         let expect = vec![
             json::json!({ "foo": 1 }),
@@ -192,5 +196,4 @@ mod tests {
             assert_eq!(values, expect);
         }
     }
-    */
 }
