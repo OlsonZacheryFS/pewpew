@@ -384,26 +384,19 @@ impl RequestMaker {
 mod tests {
     use super::*;
     use crate::create_http_client;
+    use config::common::Headers;
     use futures::channel::mpsc as futures_channel;
     use tokio::runtime::Runtime;
 
-    #[test]
-    fn fix_request_maker_test() {
-        todo!("FIX THE REQUEST MAKER TEST")
-    }
-
-    /*
     #[test]
     fn sends_request() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
             let (port, ..) = test_common::start_test_server(None);
-            let url = Template::simple(&format!("https://127.0.0.1:{}", port));
+            let url = Template::new_literal(format!("https://127.0.0.1:{}", port));
             let method = Method::GET;
-            let headers = Vec::new();
-            let body = BodyTemplate::None;
-            let rr_providers = 0;
-            let precheck_rr_providers = 0;
+            let headers = Headers::new();
+            let body = None;
             let client = create_http_client(Duration::from_secs(60)).unwrap().into();
             let (stats_tx, _) = futures_channel::unbounded();
             let no_auto_returns = true;
@@ -416,12 +409,10 @@ mod tests {
                 method,
                 headers,
                 body,
-                rr_providers,
                 client,
                 stats_tx,
                 no_auto_returns,
                 outgoing,
-                precheck_rr_providers,
                 tags,
                 timeout,
             };
@@ -430,5 +421,4 @@ mod tests {
             assert!(r.is_ok());
         });
     }
-    */
 }
