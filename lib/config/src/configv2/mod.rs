@@ -125,7 +125,10 @@ impl LoadTest<True, True> {
     }
 
     pub fn clear_loggers(&mut self) {
-        todo!()
+        self.loggers.clear();
+        for endpoint in &mut self.endpoints {
+            endpoint.logs.clear();
+        }
     }
 
     pub fn add_logger(&mut self, _: String, _: Logger) -> Result<(), ()> {
