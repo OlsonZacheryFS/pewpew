@@ -887,8 +887,8 @@ fn create_try_run_future(
     };
     //let to = try_config.file.unwrap_or_else(|| "stdout".into());
     //let logger = config::LoggerPreProcessed::from_str(select, &to).unwrap();
-    let to = try_config.file.map_or(LogTo::Stdout, |path| LogTo::File {
-        path: Template::new_literal(path),
+    let to = try_config.file.map_or(LogTo::Stdout, |path| {
+        LogTo::File(Template::new_literal(path))
     });
     // TODO: what are these values supposed to default to?
     let logger = Logger {
@@ -1176,7 +1176,7 @@ fn get_loggers_from_config(
             let writer = match &logger.to {
                 LogTo::Stdout => stdout.clone(),
                 LogTo::Stderr => stderr.clone(),
-                LogTo::File { path } => {
+                LogTo::File(path) => {
                     let mut file_path = results_dir.map_or_else(PathBuf::new, Clone::clone);
                     file_path.push(path.get());
                     let f = File::create(&file_path)

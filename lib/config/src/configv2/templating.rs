@@ -406,7 +406,7 @@ impl<T: TemplateType> TemplatedString<T> {
                 self.0.push(seg);
                 Err(self)
             }
-            (None, _) => Err(self),
+            (None, _) => Ok("".to_owned()),
         }
     }
 

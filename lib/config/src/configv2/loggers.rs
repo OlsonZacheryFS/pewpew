@@ -36,13 +36,10 @@ impl PropagateVars for Logger<False> {
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-#[serde(tag = "type")]
 pub enum LogTo<VD: Bool> {
     Stdout,
     Stderr,
-    File {
-        path: Template<String, VarsOnly, VD>,
-    },
+    File(Template<String, VarsOnly, VD>),
     /// Allows templating of non-file paths, similar to the legacy parser. Literal string values of
     /// "stdout" and "stderr" will redirect to the corresponding target, where anything else will
     /// be a file of that name.
@@ -64,9 +61,7 @@ impl PropagateVars for LogTo<False> {
         match self {
             Stderr => Ok(Stderr),
             Stdout => Ok(Stdout),
-            File { path } => Ok(File {
-                path: path.insert_vars(vars)?,
-            }),
+            File(path) => Ok(File(path.insert_vars(vars)?)),
             Raw { .. } => todo!(),
         }
     }
@@ -101,20 +96,18 @@ mod tests {
 
     #[test]
     fn test_log_to_basic() {
-        let to = from_yaml::<LogTo<False>>("type: stdout").unwrap();
+        let to = from_yaml::<LogTo<False>>("!stdout").unwrap();
         assert_eq!(to, LogTo::Stdout);
-        let to = from_yaml::<LogTo<False>>("type: stderr").unwrap();
+        let to = from_yaml::<LogTo<False>>("!stderr").unwrap();
         assert_eq!(to, LogTo::Stderr);
-        let to = from_yaml::<LogTo<False>>("type: file\npath: out.txt").unwrap();
+        let to = from_yaml::<LogTo<False>>("!file out.txt").unwrap();
         assert_eq!(
             to,
-            LogTo::File {
-                path: Template::Literal {
-                    value: "out.txt".to_owned()
-                }
-            }
+            LogTo::File(Template::Literal {
+                value: "out.txt".to_owned()
+            })
         );
-        assert!(from_yaml::<LogTo<False>>("type: stder").is_err());
+        assert!(from_yaml::<LogTo<False>>("!stder").is_err());
     }
 
     // This test may need to be rewritten when the templating/vars structure is changed
@@ -138,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_logger_defaults() {
-        let logger = from_yaml::<Logger<False>>("to:\n  type: stdout").unwrap();
+        let logger = from_yaml::<Logger<False>>("to: !stdout").unwrap();
         assert!(logger.query.is_none());
         assert_eq!(logger.pretty, false);
         assert_eq!(logger.limit, None);

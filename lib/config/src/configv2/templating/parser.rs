@@ -251,7 +251,7 @@ mod ast {
         character::complete::{anychar, none_of},
         combinator::{all_consuming, recognize, value},
         error::Error as NomError,
-        multi::many1,
+        multi::{many0, many1},
         sequence::{delimited, separated_pair},
         Finish, IResult, Parser,
     };
@@ -307,7 +307,7 @@ mod ast {
         }
 
         pub fn parse_all(input: &'a str) -> Result<Vec<Segment>, NomError<&str>> {
-            all_consuming(many1(Self::parse))(input.trim())
+            all_consuming(many0(Self::parse))(input.trim())
                 .finish()
                 .map(|(_, v)| v)
         }
