@@ -266,30 +266,25 @@ mod tests {
     use super::*;
     use crate::line_writer::blocking_writer;
 
-    //use config::FromYaml;
     use futures::executor::{block_on, block_on_stream};
     use futures_timer::Delay;
     use json::json;
     use test_common::TestWriter;
     use tokio::{runtime::Runtime, time};
 
+    use serde_yaml::from_str as from_yaml;
     use std::time::Duration;
 
     #[test]
-    fn fix_the_range_provider_test() {
-        panic!("FIX_THE_RANGE_PROVIDER_TEST")
-    }
-    /*
-    #[test]
     fn range_provider_works() {
+        use config::providers::RangeProvider;
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
             let range_params = r#"
                 start: 0
                 end: 20
             "#;
-            let range_params =
-                config::RangeProviderPreProcessed::from_yaml_str(range_params).unwrap();
+            let range_params = from_yaml::<RangeProvider>(range_params).unwrap();
             let p = range(range_params.into(), &"range_provider_works1".to_string());
             let expect: Vec<_> = (0..=20).collect();
 
@@ -305,8 +300,7 @@ mod tests {
                 end: 20
                 step: 2
             "#;
-            let range_params =
-                config::RangeProviderPreProcessed::from_yaml_str(range_params).unwrap();
+            let range_params = from_yaml::<RangeProvider>(range_params).unwrap();
             let p = range(range_params.into(), &"range_provider_works2".to_string());
 
             let expect: Vec<_> = (0..=20).step_by(2).collect();
@@ -323,8 +317,7 @@ mod tests {
                     end: 20
                     repeat: true
                 "#;
-            let range_params =
-                config::RangeProviderPreProcessed::from_yaml_str(range_params).unwrap();
+            let range_params = from_yaml::<RangeProvider>(range_params).unwrap();
             let p = range(range_params.into(), &"range_provider_works3".to_string());
 
             let expect: Vec<_> = (0..=20).cycle().take(100).collect();
@@ -337,7 +330,6 @@ mod tests {
             assert_eq!(values, expect, "third");
         });
     }
-    */
 
     #[test]
     fn fix_the_list_provider_test() {
