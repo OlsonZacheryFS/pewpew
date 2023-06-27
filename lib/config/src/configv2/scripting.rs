@@ -174,6 +174,8 @@ mod tests {
     }
 }
 
+pub use builtins::get_default_context;
+
 #[scripting_macros::boa_mod]
 mod builtins {
     use scripting_macros::boa_fn;

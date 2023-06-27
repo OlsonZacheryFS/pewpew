@@ -212,19 +212,17 @@ impl BodyHandler {
 mod tests {
     use super::*;
     use channel::{Limit, Receiver};
+    use config::query::Query;
     use futures::{channel::mpsc as futures_channel, executor::block_on, StreamExt};
     use maplit::{btreemap, btreeset};
-
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    #[test]
-    fn fix_body_handler_tests() {
-        todo!("FIX BODY HANDLER TESTS")
-    }
-    /*
-    fn create_outgoing(select: Select) -> (Outgoing, Receiver<json::Value>) {
+    fn create_outgoing(query: Query, send: ProviderSend) -> (Outgoing, Receiver<json::Value>) {
         let (tx, rx) = channel::channel(Limit::Static(1), false, &"create_outgoing".to_string());
-        (Outgoing::new(select, ProviderOrLogger::Provider(tx)), rx)
+        (
+            Outgoing::new(query, send, ProviderOrLogger::Provider(tx)),
+            rx,
+        )
     }
 
     #[allow(clippy::cognitive_complexity)]
@@ -234,28 +232,27 @@ mod tests {
         let template_values = json::json!({"response": {}}).into();
         let included_outgoing_indexes = btreeset!(0, 1, 2);
 
-        let select1 = Select::simple("1 + 1", Force, Some(vec!["repeat(3)"]), None, None);
-        let (outgoing1, mut rx1) = create_outgoing(select1);
+        let select1 = Query::simple("1 + 1".into(), vec!["repeat(3)".into()], None).unwrap();
+        let (outgoing1, mut rx1) = create_outgoing(select1, ProviderSend::Force);
 
-        let select2 = Select::simple("1", Block, None, None, None);
-        let (outgoing2, mut rx2) = create_outgoing(select2);
+        let select2 = Query::simple("1".into(), vec![], None).unwrap();
+        let (outgoing2, mut rx2) = create_outgoing(select2, ProviderSend::Block);
 
-        let select3 = Select::simple(
-            "response.body.foo",
-            IfNotFull,
-            Some(vec!["repeat(3)"]),
+        let select3 = Query::simple(
+            "response.body.foo".to_owned(),
+            vec!["repeat(3)".to_owned()],
             None,
-            None,
-        );
-        let (outgoing3, mut rx3) = create_outgoing(select3);
+        )
+        .unwrap();
+        let (outgoing3, mut rx3) = create_outgoing(select3, ProviderSend::IfNotFull);
 
-        let select4 = Select::simple("1", Block, None, None, None);
-        let (outgoing4, mut rx4) = create_outgoing(select4);
+        let select4 = Query::simple("1".to_owned(), vec![], None).unwrap();
+        let (outgoing4, mut rx4) = create_outgoing(select4, ProviderSend::Block);
 
         let outgoing = vec![outgoing1, outgoing2, outgoing3, outgoing4].into();
         let (stats_tx, mut stats_rx) = futures_channel::unbounded();
         let status = 200;
-        let tags = Arc::new(btreemap! {"_id".into() => Template::simple("0") });
+        let tags = Arc::new(btreemap! {"_id".into() => Template::new_literal("0".to_owned()) });
 
         let bh = BodyHandler {
             now,
@@ -350,6 +347,7 @@ mod tests {
         assert!(b, "stats_rx should be closed. {:?}", r);
     }
 
+    /*
     #[test]
     fn handles_block_group() {
         let now = Instant::now();

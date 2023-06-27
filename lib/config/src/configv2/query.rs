@@ -13,7 +13,7 @@ use serde_json::Value as SJVal;
 use std::{
     cell::RefCell,
     collections::{BTreeMap, VecDeque},
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     sync::Arc,
 };
 
@@ -27,6 +27,19 @@ impl Query {
         data: Arc<SJVal>,
     ) -> Result<impl Iterator<Item = Result<SJVal, ()>> + Send, ()> {
         self.0.as_ref().and_then(|_, q| q.query(data))
+    }
+
+    pub fn simple(
+        select: String,
+        for_each: Vec<String>,
+        r#where: Option<String>,
+    ) -> Result<Self, &'static str> {
+        QueryTmp {
+            select: SelectTmp::Expr(select),
+            for_each,
+            r#where,
+        }
+        .try_into()
     }
 }
 
@@ -73,8 +86,8 @@ impl TryFrom<QueryTmp> for QueryInner {
             .ok_or("invalid for_each")?;
         let r#where = value
             .r#where
-            .map(|w| compile(&w, &mut ctx.borrow_mut()))
-            .ok_or("invalid where")?;
+            .map(|w| compile(&w, &mut ctx.borrow_mut()).ok_or("invalid where"))
+            .transpose()?;
 
         Ok(Self {
             select,
@@ -93,7 +106,7 @@ fn compile(src: &str, ctx: &mut Context) -> Option<Gc<CodeBlock>> {
 }
 
 fn get_context() -> RefCell<Context> {
-    RefCell::from(Context::default()) // grab the scripting context if the functions are needed
+    RefCell::from(super::scripting::get_default_context())
 }
 
 impl QueryInner {
@@ -126,7 +139,11 @@ impl QueryInner {
             let for_each: Vec<VecDeque<JsValue>> = self
                 .for_each
                 .iter()
-                .map(|fe| ctx.execute(fe.clone()).unwrap())
+                .map(|fe| {
+                    ctx.execute(fe.clone())
+                        .map_err(|j| j.display().to_string())
+                        .expect("TODO")
+                })
                 .collect_vec()
                 .into_iter()
                 .map(|jv| match jv {
