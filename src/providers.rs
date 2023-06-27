@@ -441,20 +441,16 @@ mod tests {
     }
 
     #[test]
-    fn fix_response_provider_test() {
-        todo!("FIX THE RESPONSE PROVIDER TEST")
-    }
-
-    /*
-    #[test]
     fn response_provider_works() {
+        use config::providers::{BufferLimit, ResponseProvider};
+
         let jsons = vec![json!(1), json!(2), json!(3)];
-        let rp = config::ResponseProvider {
+        let rp = ResponseProvider {
             auto_return: None,
-            buffer: config::Limit::dynamic(),
+            buffer: BufferLimit::Auto,
             unique: false,
         };
-        let mut p = response(rp, &"response_provider_works".to_string());
+        let mut p = response(rp, &"response_provider_works".to_string(), 5);
         for value in &jsons {
             let _ = block_on(p.tx.send(value.clone()));
         }
@@ -471,6 +467,8 @@ mod tests {
 
     #[test]
     fn unique_response_provider_works() {
+        use config::providers::{BufferLimit, ResponseProvider};
+
         let jsons = vec![
             json!(1),
             json!(2),
@@ -482,12 +480,12 @@ mod tests {
             json!(2),
             json!(3),
         ];
-        let rp = config::ResponseProvider {
+        let rp = ResponseProvider {
             auto_return: None,
-            buffer: config::Limit::Static(jsons.len()),
+            buffer: BufferLimit::Limit(jsons.len() as u64),
             unique: true,
         };
-        let mut p = response(rp, &"unique_response_provider_works".to_string());
+        let mut p = response(rp, &"unique_response_provider_works".to_string(), 5);
         for value in &jsons {
             let _ = block_on(p.tx.send(value.clone()));
         }
@@ -501,7 +499,6 @@ mod tests {
 
         assert_eq!(values, expects);
     }
-    */
 
     #[test]
     fn fix_the_loggers_tests() {
