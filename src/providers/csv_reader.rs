@@ -166,22 +166,35 @@ impl Iterator for CsvReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
-
+    use config::{
+        providers::{BufferLimit, CsvParams, FileProvider, FileReadFormat},
+        templating::Template,
+    };
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     const CSV_LINES: &[&str] = &["a,b,c", "d,e,f", r#""[1,2,3]",99,14"#];
 
     #[test]
-    fn fix_csv_reader_test() {
-        todo!("FIX CSV READER TEST")
-    }
-
-    /*
-    #[test]
     fn csv_reader_basics_works() {
-        let mut fp = config::FileProvider::default();
-        fp.format = config::FileFormat::Csv;
+        let csvp = CsvParams {
+            comment: None,
+            delimiter: None,
+            double_quote: true,
+            escape: None,
+            headers: Default::default(),
+            terminator: None,
+            quote: None,
+        };
+        let fp = FileProvider {
+            path: Template::new_literal("".into()),
+            repeat: false,
+            unique: false,
+            auto_return: None,
+            buffer: BufferLimit::Auto,
+            format: FileReadFormat::Csv(csvp.clone()),
+            random: false,
+        };
 
         let expect = vec![
             json::json!(["a", "b", "c"]),
@@ -194,7 +207,7 @@ mod tests {
             write!(tmp, "{}", CSV_LINES.join(line_ending)).unwrap();
             let path = tmp.path().to_str().unwrap().to_string();
 
-            let values: Vec<_> = CsvReader::new(&fp, &path)
+            let values: Vec<_> = CsvReader::new(&fp, &csvp, &path)
                 .unwrap()
                 .map(Result::unwrap)
                 .collect();
@@ -202,5 +215,4 @@ mod tests {
             assert_eq!(values, expect);
         }
     }
-    */
 }
