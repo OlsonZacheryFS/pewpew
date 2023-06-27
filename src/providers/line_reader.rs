@@ -166,9 +166,12 @@ impl Iterator for LineReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
-
+    use config::{
+        providers::{BufferLimit, FileProvider, FileReadFormat},
+        templating::Template,
+    };
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     const LINES: &[&str] = &[
         "[1,2,3]",
@@ -179,14 +182,16 @@ mod tests {
     ];
 
     #[test]
-    fn fix_the_line_reader_test() {
-        todo!("FIX THE LINE READER TEST")
-    }
-
-    /*
-    #[test]
     fn line_reader_basics_works() {
-        let fp = config::FileProvider::default();
+        let fp = FileProvider {
+            path: Template::new_literal("".into()),
+            repeat: false,
+            unique: false,
+            auto_return: None,
+            buffer: BufferLimit::Auto,
+            format: FileReadFormat::Json,
+            random: false,
+        };
 
         let expect = vec![
             json::json!([1, 2, 3]),
@@ -214,7 +219,15 @@ mod tests {
     fn lines_longer_than_buffer_work() {
         let long_line = format!("{}{}", "a".repeat(KB8), "b".repeat(10));
         let long_lines = [long_line.clone(), long_line];
-        let fp = config::FileProvider::default();
+        let fp = FileProvider {
+            path: Template::new_literal("".into()),
+            repeat: false,
+            unique: false,
+            auto_return: None,
+            buffer: BufferLimit::Auto,
+            format: FileReadFormat::Json,
+            random: false,
+        };
 
         let expect = vec![json::json!(long_lines[0]), json::json!(long_lines[1])];
 
@@ -234,7 +247,15 @@ mod tests {
 
     #[test]
     fn line_reader_repeat_random_works() {
-        let mut fp = config::FileProvider::default();
+        let mut fp = FileProvider {
+            path: Template::new_literal("".into()),
+            repeat: false,
+            unique: false,
+            auto_return: None,
+            buffer: BufferLimit::Auto,
+            format: FileReadFormat::Json,
+            random: false,
+        };
         fp.random = true;
         fp.repeat = true;
 
@@ -270,5 +291,4 @@ mod tests {
             assert_eq!(values.len(), 5);
         }
     }
-    */
 }
