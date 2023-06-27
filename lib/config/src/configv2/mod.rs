@@ -137,7 +137,15 @@ impl LoadTest<True, True> {
     }
 
     pub fn get_duration(&self) -> std::time::Duration {
-        todo!()
+        self.endpoints
+            .iter()
+            .filter_map(|e| {
+                e.load_pattern
+                    .as_ref()
+                    .map(load_pattern::LoadPattern::duration)
+            })
+            .max()
+            .unwrap_or_default()
     }
 }
 

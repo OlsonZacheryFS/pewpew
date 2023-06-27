@@ -72,6 +72,12 @@ impl TryFrom<&str> for Percent {
 #[serde(bound = "Self: From<Vec<LoadPatternTemp>>")]
 pub struct LoadPattern<VD: Bool>(Vec<LoadPatternSingle<VD>>);
 
+impl LoadPattern<True> {
+    pub(crate) fn duration(&self) -> std::time::Duration {
+        self.0.iter().map(|s| **s.duration()).sum()
+    }
+}
+
 impl IntoIterator for LoadPattern<True> {
     type Item = LoadPatternSingle<True>;
     type IntoIter = <Vec<LoadPatternSingle<True>> as IntoIterator>::IntoIter;
@@ -128,6 +134,14 @@ pub enum LoadPatternSingle<VD: Bool> {
         to: Template<Percent, VarsOnly, VD>,
         over: Duration,
     },
+}
+
+impl LoadPatternSingle<True> {
+    fn duration(&self) -> &Duration {
+        match self {
+            Self::Linear { over, .. } => over,
+        }
+    }
 }
 
 impl PropagateVars for LoadPatternSingle<False> {
