@@ -332,24 +332,19 @@ mod tests {
     }
 
     #[test]
-    fn fix_the_list_provider_test() {
-        panic!("FIX THE LIST PROVIDER TEST")
-    }
-
-    /*
-    #[test]
-    fn literals_provider_works() {
+    fn list_provider_works() {
+        use config::providers::ListProvider;
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
             let jsons = vec![json!(1), json!(2), json!(3)];
-            let lwo = config::ListWithOptions {
+            let lp = ListProvider {
                 values: jsons.clone(),
                 repeat: false,
                 random: false,
                 unique: false,
             };
 
-            let p = list(lwo.into(), &"literals_provider_works1".to_string());
+            let p = list(lp.into(), &"literals_provider_works1".to_string());
             let expect = jsons.clone();
 
             let Provider { rx, tx, .. } = p;
@@ -359,14 +354,14 @@ mod tests {
 
             assert_eq!(values, expect, "first");
 
-            let lwo = config::ListWithOptions {
+            let lp = ListProvider {
                 values: jsons.clone(),
                 repeat: false,
                 random: true,
                 unique: false,
             };
 
-            let p = list(lwo.into(), &"literals_provider_works2".to_string());
+            let p = list(lp.into(), &"literals_provider_works2".to_string());
             let mut expect: Vec<_> = jsons.iter().map(|j| j.as_u64().unwrap()).collect();
 
             let Provider { rx, tx, .. } = p;
@@ -379,21 +374,21 @@ mod tests {
 
             assert_eq!(values, expect, "second");
 
-            let lwo = config::ListWithOptions {
+            let lp = ListProvider {
                 values: jsons.clone(),
                 repeat: true,
                 random: false,
                 unique: false,
             };
 
-            let p = list(lwo.into(), &"literals_provider_works3".to_string());
+            let p = list(lp.into(), &"literals_provider_works3".to_string());
             let expect: Vec<_> = jsons.clone().into_iter().cycle().take(100).collect();
 
             let values: Vec<_> = p.rx.take(100).collect().await;
 
             assert_eq!(values, expect, "third");
 
-            let lwo = config::ListWithOptions {
+            let lwo = ListProvider {
                 values: jsons.clone(),
                 repeat: true,
                 random: true,
@@ -419,7 +414,7 @@ mod tests {
 
             assert_eq!(values, expect, "fifth");
 
-            let lwo = config::ListWithOptions {
+            let lwo = ListProvider {
                 // be sure to keep the number of values <= the default buffer size used for a static list
                 // or this test will fail
                 values: vec![json!(1), json!(2), json!(1), json!(2), json!(1)],
@@ -444,7 +439,6 @@ mod tests {
             assert_eq!(values, expect, "sixth");
         });
     }
-    */
 
     #[test]
     fn fix_response_provider_test() {

@@ -4,9 +4,9 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 #[serde(from = "ListProviderTmp")]
 pub struct ListProvider {
-    values: Vec<serde_json::Value>,
-    random: bool,
-    repeat: bool,
+    pub values: Vec<serde_json::Value>,
+    pub random: bool,
+    pub repeat: bool,
     pub unique: bool,
 }
 
