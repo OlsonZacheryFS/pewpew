@@ -501,26 +501,15 @@ mod tests {
     }
 
     #[test]
-    fn fix_the_loggers_tests() {
-        todo!("FIX THE LOGGER TESTS")
-    }
-
-    /*
-    #[test]
     fn basic_logger_works() {
+        use config::Logger;
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
             let logger_params = r#"
-                to: ""
+                to: !file
                 kill: true
             "#;
-            let logger_params = config::FromYaml::from_yaml_str(logger_params).unwrap();
-            let (logger_params, _) = config::Logger::from_pre_processed(
-                logger_params,
-                &Default::default(),
-                &mut Default::default(),
-            )
-            .unwrap();
+            let logger_params = from_yaml::<Logger>(logger_params).unwrap();
             let (test_killer, mut test_killed_rx) = broadcast::channel(1);
             let writer = TestWriter::new();
             let (writer_channel, _) =
@@ -550,18 +539,13 @@ mod tests {
 
     #[test]
     fn basic_logger_works_with_large_data() {
+        use config::Logger;
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
             let logger_params = r#"
-                to: ""
+                to: !file
             "#;
-            let logger_params = config::FromYaml::from_yaml_str(logger_params).unwrap();
-            let (logger_params, _) = config::Logger::from_pre_processed(
-                logger_params,
-                &Default::default(),
-                &mut Default::default(),
-            )
-            .unwrap();
+            let logger_params = from_yaml::<Logger>(logger_params).unwrap();
             let (test_killer, mut test_killed_rx) = broadcast::channel(1);
             let writer = TestWriter::new();
             let (writer_channel, _) = blocking_writer(writer.clone(), test_killer.clone(), "".into());
@@ -589,18 +573,13 @@ mod tests {
 
     #[test]
     fn basic_logger_works_with_would_block() {
+        use config::Logger;
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
             let logger_params = r#"
-                to: ""
+                to: !file
             "#;
-            let logger_params = config::FromYaml::from_yaml_str(logger_params).unwrap();
-            let (logger_params, _) = config::Logger::from_pre_processed(
-                logger_params,
-                &Default::default(),
-                &mut Default::default(),
-            )
-            .unwrap();
+            let logger_params = from_yaml::<Logger>(logger_params).unwrap();
             let (test_killer, mut test_killed_rx) = broadcast::channel(1);
             let writer = TestWriter::new();
             writer.do_would_block_on_next_write();
@@ -631,19 +610,14 @@ mod tests {
 
     #[test]
     fn logger_limit_works() {
+        use config::Logger;
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
             let logger_params = r#"
-                to: ""
+                to: !file
                 limit: 1
             "#;
-            let logger_params = config::FromYaml::from_yaml_str(logger_params).unwrap();
-            let (logger_params, _) = config::Logger::from_pre_processed(
-                logger_params,
-                &Default::default(),
-                &mut Default::default(),
-            )
-            .unwrap();
+            let logger_params = from_yaml::<Logger>(logger_params).unwrap();
             let (test_killer, mut test_killed_rx) = broadcast::channel(1);
             let writer = TestWriter::new();
             let (writer_channel, _) =
@@ -669,19 +643,14 @@ mod tests {
 
     #[test]
     fn logger_pretty_works() {
+        use config::Logger;
         let rt = Runtime::new().unwrap();
         rt.block_on(async move {
             let logger_params = r#"
-                to: ""
+                to: !file
                 pretty: true
             "#;
-            let logger_params = config::FromYaml::from_yaml_str(logger_params).unwrap();
-            let (logger_params, _) = config::Logger::from_pre_processed(
-                logger_params,
-                &Default::default(),
-                &mut Default::default(),
-            )
-            .unwrap();
+            let logger_params = from_yaml::<Logger>(logger_params).unwrap();
             let (test_killer, mut test_killed_rx) = broadcast::channel(1);
             let writer = TestWriter::new();
             let (writer_channel, _) =
@@ -703,5 +672,4 @@ mod tests {
             assert!(check, "test should not be killed");
         });
     }
-    */
 }
