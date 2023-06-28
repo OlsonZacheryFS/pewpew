@@ -218,10 +218,11 @@ impl LoadTest<False, False> {
     }
 }
 
-/// Trait for inserting static Vars into Templates. Any type in the config should implement this
-/// trait
-trait PropagateVars {
-    /// Data<False> should be Self
+/// Trait for inserting static Vars into Templates. Any type in the config that needs var values
+/// should implement this trait.
+///
+/// `Self::Data<False>` should be the same type as `Self`
+trait PropagateVars: Into<Self::Data<False>> {
     type Data<VD: Bool>;
 
     fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError>;
@@ -255,6 +256,7 @@ impl<K, V> PropagateVars for BTreeMap<K, V>
 where
     K: Ord,
     V: PropagateVars,
+    BTreeMap<K, V::Data<False>>: From<Self>,
 {
     type Data<VD: Bool> = BTreeMap<K, V::Data<VD>>;
 
@@ -269,6 +271,7 @@ impl<K, V> PropagateVars for HashMap<K, V>
 where
     K: Eq + Hash,
     V: PropagateVars,
+    HashMap<K, V::Data<False>>: From<Self>,
 {
     type Data<VD: Bool> = HashMap<K, V::Data<VD>>;
 
@@ -282,6 +285,7 @@ where
 impl<T> PropagateVars for Vec<T>
 where
     T: PropagateVars,
+    Vec<T::Data<False>>: From<Self>,
 {
     type Data<VD: Bool> = Vec<T::Data<VD>>;
 
@@ -293,6 +297,7 @@ where
 impl<T> PropagateVars for Option<T>
 where
     T: PropagateVars,
+    Option<T::Data<False>>: From<Self>,
 {
     type Data<VD: Bool> = Option<T::Data<VD>>;
 
@@ -305,6 +310,7 @@ where
 impl<T, U> PropagateVars for (T, U)
 where
     U: PropagateVars,
+    (T, U::Data<False>): From<Self>,
 {
     type Data<VD: Bool> = (T, U::Data<VD>);
 
