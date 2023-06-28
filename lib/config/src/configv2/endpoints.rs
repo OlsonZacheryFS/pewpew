@@ -95,8 +95,10 @@ impl Endpoint<True> {
 
     /// Insert a load pattern if the current is None. The globally defined load_pattern should be
     /// used as a default if one is not defined locally.
-    pub(crate) fn insert_load_pattern(&mut self, load: &LoadPattern<True>) {
-        self.load_pattern.get_or_insert_with(|| load.clone());
+    pub(crate) fn insert_load_pattern(&mut self, load: Option<&LoadPattern<True>>) {
+        if let Some(lp) = load {
+            self.load_pattern.get_or_insert_with(|| lp.clone());
+        }
     }
 }
 

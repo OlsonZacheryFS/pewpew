@@ -29,7 +29,7 @@ pub use providers::ProviderType;
 pub struct LoadTest<VD: Bool = True, ED: Bool = True> {
     pub config: config::Config<VD>,
     #[serde(bound = "load_pattern::LoadPattern<VD>: serde::de::DeserializeOwned")]
-    load_pattern: load_pattern::LoadPattern<VD>,
+    load_pattern: Option<load_pattern::LoadPattern<VD>>,
     vars: Vars<ED>,
     pub providers: BTreeMap<String, ProviderType<VD>>,
     pub loggers: BTreeMap<String, Logger<VD>>,
@@ -119,7 +119,8 @@ impl LoadTest<True, True> {
         let mut lt = pre_vars.insert_vars(&vars)?;
         let lp = &lt.load_pattern;
         let ep = &mut lt.endpoints;
-        ep.iter_mut().for_each(|e| e.insert_load_pattern(lp));
+        ep.iter_mut()
+            .for_each(|e| e.insert_load_pattern(lp.as_ref()));
 
         Ok(lt)
     }
@@ -138,12 +139,20 @@ impl LoadTest<True, True> {
     }
 
     pub fn ok_for_loadtest(&self) -> Result<(), InvalidForLoadTest> {
+        use InvalidForLoadTest::MissingLoadPattern;
+        let missing = self
+            .endpoints
+            .iter()
+            .enumerate()
+            .filter_map(|(i, e)| e.load_pattern.is_some().then_some(i))
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Err(MissingLoadPattern(missing));
+        }
         // endpoint should have a peak_load, have a provides which is send_block, or depend upon a response provider
         // `peak_load` is only optional for Endpoints that define `provides`
-        // From the book: "If a root level load_pattern is not specified then
-        // each endpoint must specify its own load_pattern."
-        // so load_pattern maybe should be an Option
-        todo!("load test ok")
+
+        todo!("check peak load")
     }
 
     pub fn get_duration(&self) -> std::time::Duration {

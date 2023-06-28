@@ -13,7 +13,10 @@ pub enum LoadTestGenError {
 }
 
 #[derive(Debug, Error, Clone)]
-pub enum InvalidForLoadTest {}
+pub enum InvalidForLoadTest {
+    #[error("endpoints {0:?} are missing load patterns")]
+    MissingLoadPattern(Vec<usize>),
+}
 
 impl From<serde_yaml::Error> for LoadTestGenError {
     fn from(value: serde_yaml::Error) -> Self {
