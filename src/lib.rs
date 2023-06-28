@@ -471,7 +471,7 @@ async fn _create_run(
         exec_config.get_config_file(),
         &env_vars,
     )
-    .expect("TODO");
+    .map_err(Box::new)?;
     debug!("config::LoadTest::from_config finished");
     let test_runner = match exec_config {
         ExecConfig::Try(t) => {
