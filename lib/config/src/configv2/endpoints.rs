@@ -124,7 +124,6 @@ impl TryFrom<&str> for Method {
 // Error("deserializing nested enum in EndPointBody::str from YAML is not supported yet", line: 1, column: 1)
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-#[serde(tag = "type", content = "content")]
 pub enum EndPointBody<VD: Bool = True> {
     #[serde(rename = "str")]
     String(Template<String, Regular, VD>),
@@ -304,7 +303,7 @@ mod tests {
 
     #[test]
     fn test_body() {
-        let EndPointBody::<False>::String(body) = from_yaml("type: str\ncontent: my text").unwrap() else {
+        let EndPointBody::<False>::String(body) = from_yaml("!str my text").unwrap() else {
             panic!("was not template variant")
         };
         assert_eq!(
@@ -315,7 +314,7 @@ mod tests {
         );
 
         // TODO: maybe find a way to not require a single value array here
-        let EndPointBody::<False>::File(_, file) = from_yaml("type: file\ncontent: [body.txt]").unwrap() else {
+        let EndPointBody::<False>::File(_, file) = from_yaml("!file [body.txt]").unwrap() else {
             panic!("was not file variant")
         };
         assert_eq!(
@@ -326,18 +325,15 @@ mod tests {
         );
 
         static TEST: &str = r#"
-        type: multipart
-        content:
+        !multipart
           foo:
             headers:
               Content-Type: image/jpeg
             body:
-              type: file
-              content: [foo.jpg]
+              !file [foo.jpg]
           bar:
             body:
-              type: str
-              content: some text"#;
+              !str some text"#;
         let EndPointBody::<False>::Multipart(multipart) = from_yaml(TEST).unwrap() else {
                     panic!("was not multipart variant")
                 };
