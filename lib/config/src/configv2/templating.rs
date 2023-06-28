@@ -270,6 +270,20 @@ where
         }
     }
 
+    pub fn evaluate_with_star(&self) -> String {
+        match self {
+            Self::Literal { value } => value.clone(),
+            Self::NeedsProviders { script, __dontuse } => script
+                .iter()
+                .map(|x| match x {
+                    ExprSegment::Str(s) => s.as_str(),
+                    ExprSegment::Eval(_) | ExprSegment::ProvDirect(_) => "*",
+                })
+                .collect(),
+            _ => unreachable!(),
+        }
+    }
+
     pub fn as_static(&self) -> Option<&str> {
         match self {
             Self::Literal { value } => Some(value),

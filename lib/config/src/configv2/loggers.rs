@@ -67,6 +67,17 @@ impl PropagateVars for LogTo<False> {
     }
 }
 
+impl LogTo<True> {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Stdout => "stdout",
+            Self::Stderr => "stderr",
+            Self::File(path) => path.get().as_str(),
+            Self::Raw { .. } => todo!(),
+        }
+    }
+}
+
 /*
 impl LogTo {
     // "Flattens" a [`LogTo::Raw`] into one of the other options by evaluating the template.
