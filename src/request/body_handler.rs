@@ -96,7 +96,7 @@ impl BodyHandler {
                         let tv = Arc::clone(&tv);
                         if let ProviderOrLogger::Logger(tx) = &o.tx {
                             if let Ok(iter) = query.query(tv) {
-                                let iter = iter.map(|v| v.map_err(|_| todo!() /*Into::into*/));
+                                let iter = iter.map(|v| v.map_err(Box::new).map_err(Into::into));
                                 futures.push(
                                     BlockSender::new(iter, ProviderOrLogger::Logger(tx.clone()))
                                         .into_future(),
@@ -132,11 +132,8 @@ impl BodyHandler {
                 }
                 let query = Arc::clone(&o.query);
                 let send_behavior = o.send;
-                let iter = match query
-                    .query(template_values.clone())
-                    .map_err(|_| todo!() /*Into::into*/)
-                {
-                    Ok(v) => v.map(|v| v.map_err(|_| todo!() /*Into::into*/)),
+                let iter = match query.query(template_values.clone()).map_err(Into::into) {
+                    Ok(v) => v.map(|v| v.map_err(Box::new).map_err(Into::into)),
                     Err(e) => {
                         let r = RecoverableError::ExecutingExpression(e);
                         let kind = stats::StatKind::RecoverableError(r);
@@ -225,6 +222,7 @@ mod tests {
         )
     }
 
+    // This test still fails due to the builtins not being defined yet.
     #[allow(clippy::cognitive_complexity)]
     #[test]
     fn handles_body() {
@@ -275,8 +273,7 @@ mod tests {
             Some(f)
         };
 
-        let r = block_on(bh.handle(Ok(Some(json::json!({"foo": "bar"}))), auto_returns));
-        assert!(r.is_ok());
+        let _ = block_on(bh.handle(Ok(Some(json::json!({"foo": "bar"}))), auto_returns)).unwrap();
         assert!(auto_return_called2.load(Ordering::Relaxed));
 
         // check that the different providers got data sent to them

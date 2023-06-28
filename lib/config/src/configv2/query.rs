@@ -17,6 +17,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::error::{EvalExprError, EvalExprErrorInner};
+
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "QueryTmp")]
 pub struct Query(DiplomaticBag<QueryInner>);
@@ -25,8 +27,13 @@ impl Query {
     pub fn query(
         &self,
         data: Arc<SJVal>,
-    ) -> Result<impl Iterator<Item = Result<SJVal, ()>> + Send, ()> {
-        self.0.as_ref().and_then(|_, q| q.query(data))
+    ) -> Result<impl Iterator<Item = Result<SJVal, EvalExprError>> + Send, EvalExprError> {
+        self.0.as_ref().and_then(|_, q| {
+            Ok(q.query(data)?
+                .map(|i| i.map_err(Into::into))
+                .collect_vec()
+                .into_iter())
+        })
     }
 
     pub fn simple(
@@ -113,7 +120,8 @@ impl QueryInner {
     fn query(
         &self,
         data: Arc<SJVal>,
-    ) -> Result<impl Iterator<Item = Result<SJVal, ()>> + Send, ()> {
+    ) -> Result<impl Iterator<Item = Result<SJVal, EvalExprErrorInner>>, EvalExprErrorInner> {
+        use EvalExprErrorInner::ExecutionError;
         let mut ctx = self.ctx.borrow_mut();
         let ctx = &mut ctx;
         let data = data.as_object().unwrap();
@@ -139,25 +147,24 @@ impl QueryInner {
             let for_each: Vec<VecDeque<JsValue>> = self
                 .for_each
                 .iter()
-                .map(|fe| {
-                    ctx.execute(fe.clone())
-                        .map_err(|j| j.display().to_string())
-                        .expect("TODO")
-                })
-                .collect_vec()
+                .map(|fe| ctx.execute(fe.clone()).map_err(ExecutionError))
+                .collect::<Result<Vec<_>, _>>()?
                 .into_iter()
-                .map(|jv| match jv {
-                    JsValue::Object(o) if o.is_array() => {
-                        let a = JsArray::from_object(o, ctx).unwrap();
-                        let mut vd = VecDeque::with_capacity(a.length(ctx).unwrap() as usize);
-                        std::iter::repeat_with(|| a.pop(ctx).unwrap())
-                            .take_while(|v| !v.is_null_or_undefined())
-                            .for_each(|v| vd.push_front(v));
-                        vd
-                    }
-                    v => vec![v].into(),
+                .map(|jv| {
+                    Ok(match jv {
+                        JsValue::Object(o) if o.is_array() => {
+                            let a = JsArray::from_object(o, ctx).map_err(ExecutionError)?;
+                            let mut vd = VecDeque::with_capacity(a.length(ctx).unwrap() as usize);
+                            while a.length(ctx).map_err(ExecutionError)? > 0 {
+                                let v = a.pop(ctx).map_err(ExecutionError)?;
+                                vd.push_front(v)
+                            }
+                            vd
+                        }
+                        v => vec![v].into(),
+                    })
                 })
-                .collect();
+                .collect::<Result<Vec<_>, EvalExprErrorInner>>()?;
             let for_each = for_each
                 .into_iter()
                 .multi_cartesian_product()
@@ -171,18 +178,25 @@ impl QueryInner {
         };
         Ok(for_each
             .into_iter()
-            .filter_map(|x| {
+            .map(|x| {
                 ctx.register_global_property("for_each", x, Attribute::READONLY);
-                self.r#where
+                Ok(self
+                    .r#where
                     .as_ref()
-                    .map_or(true, |w| {
-                        ctx.execute(w.clone()).unwrap().as_boolean().unwrap()
-                    })
-                    .then(|| self.select.select(ctx).unwrap())
+                    .map_or(Ok(true), |w| {
+                        Ok(ctx.execute(w.clone()).map_err(ExecutionError)?.to_boolean())
+                    })?
+                    .then(|| self.select.select(ctx).map_err(ExecutionError)))
             })
-            .collect_vec()
+            .collect::<Result<Vec<_>, _>>()?
             .into_iter()
-            .map(|x| Ok(x.to_json(ctx).unwrap()))
+            .flatten()
+            .map(|x| {
+                x.and_then(|v| {
+                    v.to_json(ctx)
+                        .map_err(EvalExprErrorInner::InvalidResultJson)
+                })
+            })
             .collect_vec()
             .into_iter())
     }
