@@ -131,12 +131,14 @@ impl LoadTest<True, True> {
         }
     }
 
-    pub fn add_logger(&mut self, _: String, _: Logger) -> Result<(), ()> {
-        todo!()
+    pub fn add_logger(&mut self, name: String, l: Logger) -> Result<(), ()> {
+        self.loggers.insert(name, l);
+        // TODO: when should error?
+        Ok(())
     }
 
     pub fn ok_for_loadtest(&self) -> Result<(), ()> {
-        todo!()
+        todo!("load test ok")
     }
 
     pub fn get_duration(&self) -> std::time::Duration {
