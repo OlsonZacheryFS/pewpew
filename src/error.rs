@@ -49,6 +49,8 @@ pub enum TestError {
     InvalidConfigFilePath(PathBuf),
     #[error("invalid url `{0}`")]
     InvalidUrl(String),
+    #[error("invalid config for full test: {0}")]
+    LoadTestError(#[from] config::error::InvalidForLoadTest),
     #[error("recoverable error: {0}")]
     Recoverable(#[from] RecoverableError),
     #[error("error creating request: {0}")]

@@ -1027,7 +1027,7 @@ fn create_load_test_future(
     stderr: FCSender<MsgType>,
 ) -> Result<impl Future<Output = ()>, TestError> {
     debug!("create_load_test_future start");
-    config.ok_for_loadtest().expect("TODO");
+    config.ok_for_loadtest()?;
 
     let mut duration = config.get_duration();
     if let Some(t) = run_config.start_at {

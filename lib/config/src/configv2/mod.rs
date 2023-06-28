@@ -1,4 +1,4 @@
-use self::error::{LoadTestGenError, MissingEnvVar, VarsError};
+use self::error::{InvalidForLoadTest, LoadTestGenError, MissingEnvVar, VarsError};
 use self::templating::{Bool, EnvsOnly, False, Template, True};
 use serde::Deserialize;
 use std::{
@@ -137,7 +137,12 @@ impl LoadTest<True, True> {
         Ok(())
     }
 
-    pub fn ok_for_loadtest(&self) -> Result<(), ()> {
+    pub fn ok_for_loadtest(&self) -> Result<(), InvalidForLoadTest> {
+        // endpoint should have a peak_load, have a provides which is send_block, or depend upon a response provider
+        // `peak_load` is only optional for Endpoints that define `provides`
+        // From the book: "If a root level load_pattern is not specified then
+        // each endpoint must specify its own load_pattern."
+        // so load_pattern maybe should be an Option
         todo!("load test ok")
     }
 

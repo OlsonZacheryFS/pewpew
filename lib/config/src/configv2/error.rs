@@ -12,6 +12,9 @@ pub enum LoadTestGenError {
     VarsError(#[from] VarsError),
 }
 
+#[derive(Debug, Error, Clone)]
+pub enum InvalidForLoadTest {}
+
 impl From<serde_yaml::Error> for LoadTestGenError {
     fn from(value: serde_yaml::Error) -> Self {
         Arc::new(value).into()
