@@ -16,6 +16,8 @@ pub enum LoadTestGenError {
 pub enum InvalidForLoadTest {
     #[error("endpoints {0:?} are missing load patterns")]
     MissingLoadPattern(Vec<usize>),
+    #[error("endpoints {0:?} are missing a required peak load")]
+    MissingPeakLoad(Vec<usize>),
 }
 
 impl From<serde_yaml::Error> for LoadTestGenError {

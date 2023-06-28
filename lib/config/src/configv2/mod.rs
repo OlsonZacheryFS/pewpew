@@ -1,5 +1,8 @@
+use crate::common::ProviderSend;
+
 use self::error::{InvalidForLoadTest, LoadTestGenError, MissingEnvVar, VarsError};
 use self::templating::{Bool, EnvsOnly, False, Template, True};
+use itertools::Itertools;
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -139,7 +142,7 @@ impl LoadTest<True, True> {
     }
 
     pub fn ok_for_loadtest(&self) -> Result<(), InvalidForLoadTest> {
-        use InvalidForLoadTest::MissingLoadPattern;
+        use InvalidForLoadTest::{MissingLoadPattern, MissingPeakLoad};
         let missing = self
             .endpoints
             .iter()
@@ -149,10 +152,33 @@ impl LoadTest<True, True> {
         if !missing.is_empty() {
             return Err(MissingLoadPattern(missing));
         }
-        // endpoint should have a peak_load, have a provides which is send_block, or depend upon a response provider
-        // `peak_load` is only optional for Endpoints that define `provides`
+        let missing_peak = self
+            .endpoints
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.peak_load.is_none())
+            .filter(|(_, e)| {
+                e.get_required_providers()
+                    .into_iter()
+                    .all(|p| match self.providers.get(&p) {
+                        None => true,
+                        Some(ProviderType::Response(_)) => false,
+                        Some(_) => true,
+                    })
+            })
+            .filter(|(_, e)| {
+                e.provides
+                    .iter()
+                    .all(|(_, p)| p.send != ProviderSend::Block)
+            })
+            .map(|(i, _)| i)
+            .collect_vec();
 
-        todo!("check peak load")
+        if missing_peak.is_empty() {
+            Ok(())
+        } else {
+            Err(MissingPeakLoad(missing_peak))
+        }
     }
 
     pub fn get_duration(&self) -> std::time::Duration {

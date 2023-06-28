@@ -242,7 +242,7 @@ impl TryFrom<&str> for HitsPerMinute {
 #[derive(Debug, Deserialize)]
 pub struct EndpointProvides {
     query: Query,
-    send: ProviderSend,
+    pub(crate) send: ProviderSend,
 }
 
 impl EndpointProvides {
