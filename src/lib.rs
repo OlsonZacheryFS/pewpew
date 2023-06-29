@@ -1060,15 +1060,8 @@ fn create_load_test_future(
             {
                 let mut mod_interval2 = ModInterval::new();
                 for piece in load_pattern {
-                    use config::load_pattern::LoadPatternSingle;
-                    let (from, to, over) = match piece {
-                        LoadPatternSingle::Linear { from, to, over } => (
-                            PerX::minute(**peak_load.get() * **from.get()),
-                            PerX::minute(**peak_load.get() * **to.get()),
-                            over,
-                        ),
-                    };
-                    mod_interval2.append_segment(from, *over, to);
+                    let (from, to, over) = piece.into_pieces(PerX::minute, peak_load.get());
+                    mod_interval2.append_segment(from, **over, to);
                 }
 
                 mod_interval = Some(Box::pin(mod_interval2.into_stream(run_config.start_at)));

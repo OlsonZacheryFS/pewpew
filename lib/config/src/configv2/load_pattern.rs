@@ -1,3 +1,5 @@
+use crate::endpoints::HitsPerMinute;
+
 use super::common::Duration;
 use super::templating::{Bool, False, Template, True, VarsOnly};
 use super::PropagateVars;
@@ -140,6 +142,17 @@ impl LoadPatternSingle<True> {
     fn duration(&self) -> &Duration {
         match self {
             Self::Linear { over, .. } => over,
+        }
+    }
+
+    /// Returns (start, end, over)
+    pub fn into_pieces<T, F>(&self, f: F, peak: &HitsPerMinute) -> (T, T, &Duration)
+    where
+        F: Fn(f64) -> T,
+    {
+        let eval = |x: &Template<Percent, VarsOnly, True, True>| f(**x.get() * **peak);
+        match self {
+            Self::Linear { from, to, over } => (eval(from), eval(to), over),
         }
     }
 }
