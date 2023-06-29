@@ -72,6 +72,7 @@ struct QueryInner {
 #[derive(Debug, Deserialize, Derivative)]
 struct QueryTmp {
     select: SelectTmp,
+    #[serde(default = "Vec::new")]
     for_each: Vec<String>,
     r#where: Option<String>,
 }

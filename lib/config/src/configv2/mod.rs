@@ -147,7 +147,7 @@ impl LoadTest<True, True> {
             .endpoints
             .iter()
             .enumerate()
-            .filter_map(|(i, e)| e.load_pattern.is_some().then_some(i))
+            .filter_map(|(i, e)| e.load_pattern.is_none().then_some(i))
             .collect::<Vec<_>>();
         if !missing.is_empty() {
             return Err(MissingLoadPattern(missing));
@@ -316,5 +316,205 @@ where
 
     fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
         Ok((self.0, self.1.insert_vars(vars)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basic() {
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers: {}
+        endpoints: []
+        loggers: {}
+        vars: {}
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        lt.ok_for_loadtest().unwrap();
+    }
+
+    #[test]
+    fn error_missing_load_pattern() {
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers: {}
+        endpoints:
+          - method: GET
+            url: localhost:8000
+        loggers: {}
+        vars: {}
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        let err = lt.ok_for_loadtest().unwrap_err();
+        assert_eq!(err, InvalidForLoadTest::MissingLoadPattern(vec![0]));
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers: {}
+        endpoints:
+          - method: GET
+            url: localhost:8000
+          - method: POST
+            url: localhost:9900
+            load_pattern:
+              - !linear
+                  to: 150%
+                  over: 5m
+          - url: localhost:17777
+        loggers: {}
+        vars: {}
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        let err = lt.ok_for_loadtest().unwrap_err();
+        assert_eq!(err, InvalidForLoadTest::MissingLoadPattern(vec![0, 2]));
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers: {}
+        endpoints:
+          - peak_load: 12hpm
+            url: localhost:8000
+          - peak_load: 4hps
+            url: localhost:9900
+          - url: localhost:17777
+            peak_load: 10hpm
+        loggers: {}
+        vars: {}
+        load_pattern:
+          - !linear
+              to: 999%
+              over: 2m
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        // global load pattern means endpoints do not need one
+        lt.ok_for_loadtest().unwrap();
+    }
+
+    #[test]
+    fn error_missing_peak_load() {
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers: {}
+        endpoints:
+          - url: localhost:12345
+        loggers: {}
+        vars: {}
+        load_pattern:
+          - !linear
+              to: 50%
+              over: 1m
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        let err = lt.ok_for_loadtest().unwrap_err();
+        assert_eq!(err, InvalidForLoadTest::MissingPeakLoad(vec![0]));
+
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers:
+          resp: !response
+          a: !list
+            - 1
+        endpoints:
+          # defines peak load
+          - url: localhost:12345
+            peak_load: 99hpm
+          # depends on response provider
+          - url: localhost:7777/${p:resp}
+          # has a provides with block
+          - url: localhost:23456
+            provides:
+              resp:
+                query:
+                  select: "1"
+                send: block
+              a:
+                query:
+                  select: "43"
+                send: if_not_full
+          # none of those
+          - url: localhost:445${p:a}
+        loggers: {}
+        vars: {}
+        load_pattern:
+          - !linear
+              to: 50%
+              over: 1m
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        let err = lt.ok_for_loadtest().unwrap_err();
+        assert_eq!(err, InvalidForLoadTest::MissingPeakLoad(vec![3]));
+    }
+
+    #[test]
+    fn get_test_duration() {
+        use std::time::Duration;
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers: {}
+        endpoints: []
+        loggers: {}
+        vars: {}
+        load_pattern: []
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        assert_eq!(lt.get_duration(), Duration::default());
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers: {}
+        endpoints: []
+        loggers: {}
+        vars: {}
+        load_pattern:
+          - !linear
+              from: 50%
+              to: 150%
+              over: 12h
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        assert_eq!(lt.get_duration(), Duration::default());
+        let input = r#"
+        config:
+          client: {}
+          general: {}
+        providers: {}
+        endpoints:
+          - url: localhost:8080
+            load_pattern:
+              - !linear
+                  to: 78%
+                  over: 13h
+          - url: localhost:9900
+          - url: localhost:5432
+            load_pattern:
+              - !linear
+                  to: 99%
+                  over: 1m
+        loggers: {}
+        vars: {}
+        load_pattern:
+          - !linear
+              from: 50%
+              to: 150%
+              over: 12h
+        "#;
+        let lt = LoadTest::from_yaml(input, &PathBuf::new(), &BTreeMap::new()).unwrap();
+        assert_eq!(lt.get_duration(), Duration::from_secs(13 * 60 * 60));
     }
 }

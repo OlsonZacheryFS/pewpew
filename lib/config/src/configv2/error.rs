@@ -12,7 +12,7 @@ pub enum LoadTestGenError {
     VarsError(#[from] VarsError),
 }
 
-#[derive(Debug, Error, Clone)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum InvalidForLoadTest {
     #[error("endpoints {0:?} are missing load patterns")]
     MissingLoadPattern(Vec<usize>),
