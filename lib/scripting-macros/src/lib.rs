@@ -8,19 +8,16 @@ pub fn boa_fn(_attrs: TokenStream, input: TokenStream) -> TokenStream {
     let name = &fun.sig.ident;
     let arg_count = fun.sig.inputs.len();
     let ac = 0..arg_count;
-    let ac2 = ac.clone();
     quote! {
         pub fn #name(_: &::boa_engine::JsValue,
             args: &[::boa_engine::JsValue],
             ctx: &mut ::boa_engine::Context) -> ::boa_engine::JsResult<boa_engine::JsValue> {
             use ::boa_engine::builtins::JsArgs;
-            use self::helper::{AsJsResult, GetAs};
+            use self::helper::{AsJsResult, JsInput};
             #fun
 
-            let ____args = [
-                #(args.get_or_undefined(#ac).get_as(ctx)?),*
-            ];
-            #name (#(____args[#ac2]),*).as_js_result()
+
+            #name (#(JsInput::from_js(args.get_or_undefined(#ac), ctx)?),*).as_js_result(ctx)
         }
     }
     .into()
@@ -65,7 +62,7 @@ pub fn boa_mod(_attrs: TokenStream, input: TokenStream) -> TokenStream {
                         _ => None,
                     })
                     .find_map(|(attr, name)| (attr == "jsname").then_some(name))
-                    .expect("boa function requires a jsname"),
+                    .unwrap_or(f.sig.ident.clone().to_string()),
             )),
             _ => None,
         })
