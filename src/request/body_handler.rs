@@ -222,7 +222,6 @@ mod tests {
         )
     }
 
-    // This test still fails due to the builtins not being defined yet.
     #[allow(clippy::cognitive_complexity)]
     #[test]
     fn handles_body() {
@@ -344,27 +343,25 @@ mod tests {
         assert!(b, "stats_rx should be closed. {:?}", r);
     }
 
-    /*
     #[test]
     fn handles_block_group() {
         let now = Instant::now();
         let template_values = json::json!({"response": {}}).into();
         let included_outgoing_indexes = btreeset!(0, 1, 2);
 
-        let select1 = Select::simple("1 + 1", Block, Some(vec!["repeat(3)"]), None, None);
-        let (outgoing1, mut rx1) = create_outgoing(select1);
+        let q1 = Query::simple("1 + 1".to_owned(), vec!["repeat(3)".to_owned()], None).unwrap();
+        let (outgoing1, mut rx1) = create_outgoing(q1, ProviderSend::Block);
 
-        let select2 = Select::simple("1", Block, None, None, None);
-        let (outgoing2, mut rx2) = create_outgoing(select2);
+        let q2 = Query::simple("1".to_owned(), vec![], None).unwrap();
+        let (outgoing2, mut rx2) = create_outgoing(q2, ProviderSend::Block);
 
-        let select3 = Select::simple(
-            "response.body.foo",
-            Block,
-            Some(vec!["repeat(2)"]),
+        let q3 = Query::simple(
+            "response.body.foo".to_owned(),
+            vec!["repeat(2)".to_owned()],
             None,
-            None,
-        );
-        let (outgoing3, mut rx3) = create_outgoing(select3);
+        )
+        .unwrap();
+        let (outgoing3, mut rx3) = create_outgoing(q3, ProviderSend::Block);
 
         let outgoing = vec![outgoing1, outgoing2, outgoing3].into();
         let (stats_tx, _) = futures_channel::unbounded();
@@ -428,5 +425,4 @@ mod tests {
         };
         assert!(b, "receiver 3 is closed, {:?}", r);
     }
-    */
 }
