@@ -109,4 +109,18 @@ mod tests {
         let ps: ProviderSend = from_yaml("!if_not_full").unwrap();
         assert_eq!(ps, ProviderSend::IfNotFull);
     }
+
+    #[test]
+    fn headers_multi_define() {
+        let input = r#"
+        auth: null
+        auth: foo
+        "#;
+        let headers = from_yaml::<Headers<True>>(input).unwrap();
+        assert_eq!(headers.0.len(), 2);
+        assert_eq!(headers.0[0].0, "auth");
+        assert_eq!(headers.0[0].1.as_static().unwrap(), "null");
+        assert_eq!(headers.0[1].0, "auth");
+        assert_eq!(headers.0[1].1.as_static().unwrap(), "foo");
+    }
 }
