@@ -15,3 +15,5 @@
 - [Viewing results](./viewing-results.md)
 - [Tuning a machine](./tuning.md)
 - [Found a bug?](./bug-report.md)
+
+[Differences from pewpew 0.5.x config](./old-version-diffs.md)
