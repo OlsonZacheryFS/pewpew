@@ -42,7 +42,7 @@ impl PropagateVars for FileProvider<False> {
 
     fn insert_vars(
         self,
-        vars: &crate::configv2::VarValue<True>,
+        vars: &crate::configv2::Vars<True>,
     ) -> Result<Self::Data<True>, crate::configv2::VarsError> {
         let Self {
             path,

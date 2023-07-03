@@ -1,6 +1,6 @@
 use super::{
     error::{CreateExprError, EvalExprError, EvalExprErrorInner, IntoStreamError},
-    templating::{Segment, TemplateType, True, OK},
+    templating::{False, Segment, TemplateType, True},
 };
 use boa_engine::{
     object::{JsFunction, ObjectInitializer},
@@ -39,8 +39,7 @@ pub struct EvalExpr {
 impl EvalExpr {
     pub fn from_template<T>(script: Vec<Segment<T, True>>) -> Result<Self, CreateExprError>
     where
-        T: TemplateType,
-        T::ProvAllowed: OK,
+        T: TemplateType<ProvAllowed = True, EnvsAllowed = False>,
     {
         let mut needed = Vec::new();
         let uses_p = OnceCell::new();
@@ -56,7 +55,8 @@ impl EvalExpr {
                         needed.push(p);
                         s
                     }
-                    _ => unreachable!(),
+                    Segment::Env(_, no) => no.no(),
+                    _ => unreachable!("should have inserted vars first"),
                 })
                 .collect::<String>()
         );

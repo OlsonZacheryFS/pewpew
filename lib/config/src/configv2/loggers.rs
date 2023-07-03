@@ -20,10 +20,7 @@ pub struct Logger<VD: Bool = True> {
 impl PropagateVars for Logger<False> {
     type Data<VD: Bool> = Logger<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         Ok(Logger {
             query: self.query,
             to: self.to.insert_vars(vars)?,
@@ -53,10 +50,7 @@ pub enum LogTo<VD: Bool> {
 impl PropagateVars for LogTo<False> {
     type Data<VD: Bool> = LogTo<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         use LogTo::*;
         match self {
             Stderr => Ok(Stderr),

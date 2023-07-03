@@ -33,18 +33,12 @@ impl<'a> From<NomError<&'a str>> for TemplateParseError {
 #[derivative(Debug)]
 pub enum Segment<T: TemplateType, IN: Bool = False> {
     Raw(String),
-    Env(
-        String,
-        #[derivative(Debug = "ignore")] (T::EnvsAllowed, IN::Inverse),
-    ),
-    Var(
-        String,
-        #[derivative(Debug = "ignore")] (T::VarsAllowed, IN::Inverse),
-    ),
+    Env(String, #[derivative(Debug = "ignore")] T::EnvsAllowed),
+    Var(String, #[derivative(Debug = "ignore")] T::VarsAllowed),
     Prov(String, #[derivative(Debug = "ignore")] T::ProvAllowed),
     Expr(
         Vec<Segment<T, True>>,
-        #[derivative(Debug = "ignore")] (T::ProvAllowed, IN::Inverse),
+        #[derivative(Debug = "ignore")] IN::Inverse,
     ),
 }
 
@@ -65,16 +59,16 @@ impl<'a, T: TemplateType, IN: Bool> TryFrom<ASeg<'a>> for Segment<T, IN> {
         match value {
             ASeg::Literal(r) => Ok(Self::Raw(r.iter().map(ToString::to_string).collect())),
             ASeg::Template(ATem { tag: 'e', inner }) => {
-                Self::prim_gen(Self::Env, 'e', inner, || Self::allowed_plus_outer('e'))
+                Self::prim_gen(Self::Env, 'e', inner, || Self::allowed_flag('e'))
             }
             ASeg::Template(ATem { tag: 'v', inner }) => {
-                Self::prim_gen(Self::Var, 'v', inner, || Self::allowed_plus_outer('v'))
+                Self::prim_gen(Self::Var, 'v', inner, || Self::allowed_flag('v'))
             }
             ASeg::Template(ATem { tag: 'p', inner }) => {
                 Self::prim_gen(Self::Prov, 'p', inner, || Self::allowed_flag('p'))
             }
             ASeg::Template(ATem { tag: 'x', inner }) => {
-                let flags = Self::allowed_plus_outer('x')?;
+                let flags = Self::outer_flag('x')?;
                 let inner = inner
                     .into_iter()
                     .map(Segment::<T, True>::try_from)
@@ -97,6 +91,7 @@ impl<T: TemplateType, IN: Bool> Segment<T, IN> {
         D::try_default().ok_or(TemplateParseError::InvalidNested)
     }
 
+    #[allow(dead_code)]
     fn allowed_plus_outer<D: TryDefault, D2: TryDefault>(
         tag: char,
     ) -> Result<(D, D2), TemplateParseError> {
@@ -149,6 +144,22 @@ mod tests {
                 Segment::Raw("/file.txt".to_owned())
             ]
         );
+        let input = "${x:foo(${e:HOME})}/file.txt";
+        let tem: Vec<ET> = parse_template_string(input).unwrap();
+        assert_eq!(
+            tem,
+            vec![
+                Segment::Expr(
+                    vec![
+                        Segment::Raw("foo(".to_owned()),
+                        Segment::Env("HOME".to_owned(), get_d()),
+                        Segment::Raw(")".to_owned()),
+                    ],
+                    get_d()
+                ),
+                Segment::Raw("/file.txt".to_owned())
+            ]
+        );
 
         let input = "${v:x}";
         let err = parse_template_string::<EnvsOnly>(input).unwrap_err();
@@ -156,9 +167,6 @@ mod tests {
         let input = "${p:x}";
         let err = parse_template_string::<EnvsOnly>(input).unwrap_err();
         assert_eq!(err, InvalidTemplateType('p'));
-        let input = "${x:x}";
-        let err = parse_template_string::<EnvsOnly>(input).unwrap_err();
-        assert_eq!(err, InvalidTemplateType('x'));
 
         let input = "${e:foo${p:bar}}";
         let err = parse_template_string::<EnvsOnly>(input).unwrap_err();
@@ -176,6 +184,19 @@ mod tests {
                 Segment::Var("bar".to_owned(), get_d()),
             ]
         );
+        let input = "${x:foo(${v:bar})}";
+        let tem = parse_template_string::<VarsOnly>(input).unwrap();
+        assert_eq!(
+            tem,
+            vec![Segment::Expr(
+                vec![
+                    Segment::Raw("foo(".to_owned()),
+                    Segment::Var("bar".to_owned(), get_d()),
+                    Segment::Raw(")".to_owned()),
+                ],
+                get_d()
+            )]
+        );
 
         let input = "${e:x}";
         let err = parse_template_string::<VarsOnly>(input).unwrap_err();
@@ -183,9 +204,6 @@ mod tests {
         let input = "${p:x}";
         let err = parse_template_string::<VarsOnly>(input).unwrap_err();
         assert_eq!(err, InvalidTemplateType('p'));
-        let input = "${x:x}";
-        let err = parse_template_string::<VarsOnly>(input).unwrap_err();
-        assert_eq!(err, InvalidTemplateType('x'));
 
         let input = "${v:foo${p:bar}}";
         let err = parse_template_string::<VarsOnly>(input).unwrap_err();
@@ -235,9 +253,6 @@ mod tests {
             ]
         );
 
-        let input = "${x:${v:_}}";
-        let err = parse_template_string::<Regular>(input).unwrap_err();
-        assert_eq!(err, InvalidNested);
         let input = "${x:${x:_}}";
         let err = parse_template_string::<Regular>(input).unwrap_err();
         assert_eq!(err, InvalidNested);

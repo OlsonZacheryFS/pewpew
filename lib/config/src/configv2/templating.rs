@@ -368,13 +368,14 @@ where
     }
 }
 
-impl<V: FromStr, T: TemplateType<VarsAllowed = True>> PropagateVars for Template<V, T, False, True>
+impl<V: FromStr, T: TemplateType<VarsAllowed = True, EnvsAllowed = False>> PropagateVars
+    for Template<V, T, False, True>
 where
     V::Err: StdError + Send + Sync + 'static,
 {
     type Data<VD: Bool> = Template<V, T, VD, True>;
 
-    fn insert_vars(self, vars: &super::VarValue<True>) -> Result<Self::Data<True>, VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, VarsError> {
         match self {
             Self::Literal { value } => Ok(Template::Literal { value }),
             Self::PreVars {
@@ -449,7 +450,9 @@ impl<T: TemplateType> TemplatedString<T> {
             .map(map_segment)
             .collect::<Option<TemplatedString<Regular>>>()
     }
+}
 
+impl<T: TemplateType<ProvAllowed = True, EnvsAllowed = False>> TemplatedString<T> {
     // only call after Vars insertion
     fn into_script(self) -> Result<Vec<ExprSegment>, CreateExprError>
     where
@@ -483,29 +486,32 @@ impl<T: TemplateType> FromIterator<Segment<T>> for TemplatedString<T> {
     }
 }
 
-impl<T: TemplateType<VarsAllowed = True>> PropagateVars for TemplatedString<T> {
+impl<T: TemplateType<VarsAllowed = True, EnvsAllowed = False>> PropagateVars
+    for TemplatedString<T>
+{
     type Data<VD: Bool> = Self;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         self.0
             .into_iter()
             .map(|p| match p {
-                Segment::Var(v, ..) => {
-                    let path = v.split('.').collect_vec();
-                    path.iter()
-                        .fold(Some(vars), |vars, n| vars.and_then(|v| v.get(n)))
-                        .and_then(super::VarValue::finish)
-                        .map(|vt| match vt {
-                            super::VarTerminal::Num(n) => n.to_string(),
-                            super::VarTerminal::Str(s) => s.get().clone(),
-                            super::VarTerminal::Bool(b) => b.to_string(),
+                Segment::Var(v, True) => super::get_var_at_path(vars, &v)
+                    .ok_or_else(|| super::VarsError::VarNotFound(v))
+                    .map(|v| Segment::Raw(v.to_string())),
+                Segment::Env(_, no) => no.no(),
+                Segment::Expr(v, True) => Ok(Segment::Expr(
+                    v.into_iter()
+                        .map(|s| match s {
+                            Segment::Env(_, no) => no.no(),
+                            Segment::Expr(_, no) => no.no(),
+                            Segment::Var(v, True) => super::get_var_at_path(vars, &v)
+                                .ok_or_else(|| super::VarsError::VarNotFound(v))
+                                .map(|v| Segment::Raw(v.to_string())),
+                            other => Ok(other),
                         })
-                        .ok_or_else(|| super::VarsError::VarNotFound(v))
-                        .map(Segment::Raw)
-                }
+                        .collect::<Result<_, _>>()?,
+                    True,
+                )),
                 other => Ok(other),
             })
             .collect()
@@ -522,6 +528,19 @@ impl<T: TemplateType<EnvsAllowed = True>> TemplatedString<T> {
                     .cloned()
                     .map(Segment::Raw)
                     .ok_or_else(|| MissingEnvVar(e)),
+                Segment::Expr(x, True) => x
+                    .into_iter()
+                    .map(|s| match s {
+                        Segment::Expr(_, no) => no.no(),
+                        Segment::Env(e, True) => evars
+                            .get(&e)
+                            // make the String into a valid code literal
+                            .map(|ev| Segment::Raw(format!("\"{}\"", ev.escape_default())))
+                            .ok_or_else(|| MissingEnvVar(e)),
+                        other => Ok(other),
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map(|x| Segment::Expr(x, True)),
                 other => Ok(other),
             })
             .collect()

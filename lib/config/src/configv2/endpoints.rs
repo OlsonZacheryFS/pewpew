@@ -50,10 +50,7 @@ pub struct Endpoint<VD: Bool = True> {
 impl PropagateVars for Endpoint<False> {
     type Data<VD: Bool> = Endpoint<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         Ok(Endpoint {
             declare: self.declare.insert_vars(vars)?,
             headers: self.headers.insert_vars(vars)?,
@@ -164,10 +161,7 @@ impl EndPointBody<False> {
 impl PropagateVars for EndPointBody<False> {
     type Data<VD: Bool> = EndPointBody<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         use EndPointBody::*;
         match self {
             String(s) => s.insert_vars(vars).map(String),
@@ -187,10 +181,7 @@ pub struct MultiPartBodySection<VD: Bool = True> {
 impl PropagateVars for MultiPartBodySection<False> {
     type Data<VD: Bool> = MultiPartBodySection<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         let Self { headers, body } = self;
         Ok(MultiPartBodySection {
             headers: headers.insert_vars(vars)?,

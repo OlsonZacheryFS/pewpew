@@ -5,7 +5,8 @@ use self::templating::{Bool, EnvsOnly, False, Template, True};
 use itertools::Itertools;
 use serde::Deserialize;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, VecDeque},
+    fmt::{self, Display},
     hash::Hash,
     path::PathBuf,
 };
@@ -44,24 +45,56 @@ type Vars<ED> = BTreeMap<String, VarValue<ED>>;
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum VarValue<ED: Bool> {
-    Nested(Vars<ED>),
-    Terminal(VarTerminal<ED>),
+    Map(Vars<ED>),
+    Num(i64),
+    Bool(bool),
+    Str(Template<String, EnvsOnly, True, ED>),
+    List(Vec<Self>),
+}
+
+impl Display for VarValue<True> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Num(n) => Display::fmt(n, f),
+            Self::Bool(b) => Display::fmt(b, f),
+            Self::Str(t) => write!(f, "\"{}\"", t.get().escape_default()),
+            Self::List(l) => {
+                write!(f, "[")?;
+                for v in l {
+                    Display::fmt(v, f)?;
+                    write!(f, ",")?;
+                }
+                write!(f, "]")
+            }
+            Self::Map(m) => {
+                write!(f, "{{")?;
+                for (k, v) in m.iter() {
+                    write!(f, "\"{}\": {}", k.escape_default(), v)?;
+                    write!(f, ",")?;
+                }
+                write!(f, "}}")
+            }
+        }
+    }
 }
 
 impl VarValue<True> {
-    fn get(&self, key: &str) -> Option<&Self> {
-        match self {
-            Self::Terminal(..) => None,
-            Self::Nested(v) => v.get(key),
+    fn get(&self, path: &[&str]) -> Option<&Self> {
+        match (self, path) {
+            (Self::Map(vars), [key, rest @ ..]) => vars.get(*key)?.get(rest),
+            (Self::List(arr), [idx, rest @ ..]) => arr.get(idx.parse::<usize>().ok()?)?.get(rest),
+            (terminal, []) => Some(terminal),
+            _ => None,
         }
     }
+}
 
-    fn finish(&self) -> Option<&VarTerminal<True>> {
-        match self {
-            Self::Terminal(v) => Some(v),
-            Self::Nested(..) => None,
-        }
-    }
+fn get_var_at_path<'a>(vars: &'a Vars<True>, path: &str) -> Option<&'a VarValue<True>> {
+    let mut path = path.split('.').collect::<VecDeque<_>>();
+    let this = path.pop_front()?;
+    let var = vars.get(this)?;
+
+    var.get(&path.make_contiguous())
 }
 
 fn insert_env_vars(
@@ -73,35 +106,21 @@ fn insert_env_vars(
         .collect()
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum VarTerminal<ED: Bool> {
-    Num(i64),
-    Bool(bool),
-    Str(Template<String, EnvsOnly, True, ED>),
-}
-
-impl VarTerminal<False> {
-    fn insert_env_vars(
-        self,
-        evars: &BTreeMap<String, String>,
-    ) -> Result<VarTerminal<True>, MissingEnvVar> {
-        match self {
-            Self::Num(n) => Ok(VarTerminal::Num(n)),
-            Self::Bool(b) => Ok(VarTerminal::Bool(b)),
-            Self::Str(template) => template.insert_env_vars(evars).map(VarTerminal::Str),
-        }
-    }
-}
-
 impl VarValue<False> {
     fn insert_env_vars(
         self,
         evars: &BTreeMap<String, String>,
     ) -> Result<VarValue<True>, MissingEnvVar> {
         match self {
-            Self::Nested(v) => insert_env_vars(v, evars).map(VarValue::Nested),
-            Self::Terminal(t) => t.insert_env_vars(evars).map(VarValue::Terminal),
+            Self::Map(v) => insert_env_vars(v, evars).map(VarValue::Map),
+            Self::List(v) => v
+                .into_iter()
+                .map(|v| v.insert_env_vars(evars))
+                .collect::<Result<_, _>>()
+                .map(VarValue::List),
+            Self::Str(t) => t.insert_env_vars(evars).map(VarValue::Str),
+            Self::Bool(b) => Ok(VarValue::Bool(b)),
+            Self::Num(n) => Ok(VarValue::Num(n)),
         }
     }
 }
@@ -118,7 +137,7 @@ impl LoadTest<True, True> {
             .endpoints
             .iter_mut()
             .for_each(|e| e.insert_path(file_path));
-        let vars = VarValue::Nested(std::mem::take(&mut pre_vars.vars));
+        let vars = std::mem::take(&mut pre_vars.vars);
         let mut lt = pre_vars.insert_vars(&vars)?;
         let lp = &lt.load_pattern;
         let ep = &mut lt.endpoints;
@@ -225,13 +244,13 @@ impl LoadTest<False, False> {
 trait PropagateVars: Into<Self::Data<False>> {
     type Data<VD: Bool>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError>;
+    fn insert_vars(self, vars: &Vars<True>) -> Result<Self::Data<True>, VarsError>;
 }
 
 impl PropagateVars for LoadTest<False, True> {
     type Data<VD: Bool> = LoadTest<VD, True>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
+    fn insert_vars(self, vars: &Vars<True>) -> Result<Self::Data<True>, VarsError> {
         let Self {
             config,
             load_pattern,
@@ -260,7 +279,7 @@ where
 {
     type Data<VD: Bool> = BTreeMap<K, V::Data<VD>>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
+    fn insert_vars(self, vars: &Vars<True>) -> Result<Self::Data<True>, VarsError> {
         self.into_iter()
             .map(|(k, v)| Ok((k, v.insert_vars(vars)?)))
             .collect()
@@ -275,7 +294,7 @@ where
 {
     type Data<VD: Bool> = HashMap<K, V::Data<VD>>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
+    fn insert_vars(self, vars: &Vars<True>) -> Result<Self::Data<True>, VarsError> {
         self.into_iter()
             .map(|(k, v)| Ok((k, v.insert_vars(vars)?)))
             .collect()
@@ -289,7 +308,7 @@ where
 {
     type Data<VD: Bool> = Vec<T::Data<VD>>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
+    fn insert_vars(self, vars: &Vars<True>) -> Result<Self::Data<True>, VarsError> {
         self.into_iter().map(|x| x.insert_vars(vars)).collect()
     }
 }
@@ -301,7 +320,7 @@ where
 {
     type Data<VD: Bool> = Option<T::Data<VD>>;
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
+    fn insert_vars(self, vars: &Vars<True>) -> Result<Self::Data<True>, VarsError> {
         self.map(|t| t.insert_vars(vars)).transpose()
     }
 }
@@ -314,7 +333,7 @@ where
 {
     type Data<VD: Bool> = (T, U::Data<VD>);
 
-    fn insert_vars(self, vars: &VarValue<True>) -> Result<Self::Data<True>, VarsError> {
+    fn insert_vars(self, vars: &Vars<True>) -> Result<Self::Data<True>, VarsError> {
         Ok((self.0, self.1.insert_vars(vars)?))
     }
 }

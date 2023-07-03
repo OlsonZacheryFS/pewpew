@@ -92,10 +92,7 @@ impl IntoIterator for LoadPattern<True> {
 impl PropagateVars for LoadPattern<False> {
     type Data<VD: Bool> = LoadPattern<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         self.0.insert_vars(vars).map(LoadPattern)
     }
 }
@@ -160,10 +157,7 @@ impl LoadPatternSingle<True> {
 impl PropagateVars for LoadPatternSingle<False> {
     type Data<VD: Bool> = LoadPatternSingle<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         match self {
             Self::Linear { from, to, over } => Ok(LoadPatternSingle::Linear {
                 from: from.insert_vars(vars)?,

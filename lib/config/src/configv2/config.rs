@@ -16,10 +16,7 @@ pub struct Config<VD: Bool = True> {
 impl PropagateVars for Config<False> {
     type Data<VD: Bool> = Config<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         Ok(Config {
             client: self.client.insert_vars(vars)?,
             general: self.general,
@@ -41,10 +38,7 @@ pub struct Client<VD: Bool> {
 impl PropagateVars for Client<False> {
     type Data<VD: Bool> = Client<VD>;
 
-    fn insert_vars(
-        self,
-        vars: &super::VarValue<True>,
-    ) -> Result<Self::Data<True>, super::VarsError> {
+    fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         let Self {
             request_timeout,
             headers,
