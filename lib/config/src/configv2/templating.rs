@@ -76,8 +76,7 @@ impl<V, T, VD, ED> Clone for Template<V, T, VD, ED>
 where
     V: FromStr + Clone,
     V::Err: StdError + Send + Sync + 'static,
-    T: TemplateType,
-    <T::ProvAllowed as Bool>::Inverse: OK,
+    T: TemplateType<ProvAllowed = False>,
     VD: Bool,
     ED: Bool,
 {
@@ -102,7 +101,7 @@ where
                 next: *next,
                 __dontuse: *__dontuse,
             },
-            _ => unreachable!(),
+            Self::NeedsProviders { __dontuse, .. } => __dontuse.2.no(),
         }
     }
 }
@@ -198,10 +197,7 @@ where
     }
 }
 
-impl<T: TemplateType> Template<String, T, True, True>
-where
-    T::ProvAllowed: OK,
-{
+impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
     pub fn into_stream<P, Ar, E>(
         self,
         providers: &BTreeMap<String, P>,
@@ -247,7 +243,8 @@ where
                         .unwrap_or_default()
                 }))
             }
-            _ => unreachable!(),
+            Self::Env { __dontuse, .. } => __dontuse.1.no(),
+            Self::PreVars { __dontuse, .. } => __dontuse.1.no(),
         })
     }
 
@@ -266,7 +263,8 @@ where
                         .ok_or_else(|| EvalExprError(format!("provider data {p} not found"))),
                 })
                 .collect(),
-            _ => unreachable!(),
+            Self::Env { __dontuse, .. } => __dontuse.1.no(),
+            Self::PreVars { __dontuse, .. } => __dontuse.1.no(),
         }
     }
 
@@ -280,7 +278,8 @@ where
                     ExprSegment::Eval(_) | ExprSegment::ProvDirect(_) => "*",
                 })
                 .collect(),
-            _ => unreachable!(),
+            Self::Env { __dontuse, .. } => __dontuse.1.no(),
+            Self::PreVars { __dontuse, .. } => __dontuse.1.no(),
         }
     }
 
@@ -305,7 +304,8 @@ where
                 .into_iter()
                 .map(ToOwned::to_owned)
                 .collect(),
-            _ => unreachable!(),
+            Self::PreVars { __dontuse, .. } => __dontuse.1.no(),
+            Self::Env { __dontuse, .. } => __dontuse.1.no(),
         }
     }
 }
@@ -326,27 +326,31 @@ impl<VD: Bool> Template<String, EnvsOnly, VD, False> {
                     .try_collect()
                     .expect("EnvsOnly shouldn't have other types"),
             }),
-            _ => unreachable!(),
+            Self::PreVars { __dontuse, .. } => __dontuse.0.no(),
+            Self::NeedsProviders { __dontuse, .. } => __dontuse.0.no(),
         }
     }
 }
 
-impl<V: FromStr, T: TemplateType> Template<V, T, True, True>
+impl<V: FromStr, T: TemplateType<ProvAllowed = False>> Template<V, T, True, True>
 where
-    <T::ProvAllowed as Bool>::Inverse: OK,
     <V as FromStr>::Err: StdError + Send + Sync + 'static,
 {
     pub fn get(&self) -> &V {
         match self {
             Self::Literal { value } => value,
-            _ => unreachable!(),
+            Self::PreVars { __dontuse, .. } => __dontuse.1.no(),
+            Self::Env { __dontuse, .. } => __dontuse.1.no(),
+            Self::NeedsProviders { __dontuse, .. } => __dontuse.2.no(),
         }
     }
 
     pub fn get_mut(&mut self) -> &mut V {
         match self {
             Self::Literal { value } => value,
-            _ => unreachable!(),
+            Self::PreVars { __dontuse, .. } => __dontuse.1.no(),
+            Self::Env { __dontuse, .. } => __dontuse.1.no(),
+            Self::NeedsProviders { __dontuse, .. } => __dontuse.2.no(),
         }
     }
 }
@@ -364,9 +368,8 @@ where
     }
 }
 
-impl<V: FromStr, T: TemplateType> PropagateVars for Template<V, T, False, True>
+impl<V: FromStr, T: TemplateType<VarsAllowed = True>> PropagateVars for Template<V, T, False, True>
 where
-    T::VarsAllowed: OK,
     V::Err: StdError + Send + Sync + 'static,
 {
     type Data<VD: Bool> = Template<V, T, VD, True>;
@@ -382,7 +385,8 @@ where
                 let s = template.insert_vars(vars)?.collapse();
                 next(s)
             }
-            _ => unreachable!(),
+            Self::NeedsProviders { __dontuse, .. } => __dontuse.1.no(),
+            Self::Env { __dontuse, .. } => __dontuse.1.no(),
         }
     }
 }
@@ -424,7 +428,7 @@ impl<T: TemplateType> TemplatedString<T> {
         }
     }
 
-    fn iter(&self) -> impl Iterator<Item = &parser::Segment<T>> {
+    pub fn iter(&self) -> impl Iterator<Item = &parser::Segment<T>> {
         self.0.iter()
     }
 
@@ -457,7 +461,7 @@ impl<T: TemplateType> TemplatedString<T> {
                     Segment::Raw(x) => ExprSegment::Str(x),
                     Segment::Prov(p, _) => ExprSegment::ProvDirect(p),
                     Segment::Expr(x, _) => ExprSegment::Eval(EvalExpr::from_template(x)?),
-                    _ => unreachable!(),
+                    _ => unreachable!("need to insert vars first"),
                 })
             })
             .collect()
@@ -479,10 +483,7 @@ impl<T: TemplateType> FromIterator<Segment<T>> for TemplatedString<T> {
     }
 }
 
-impl<T: TemplateType> PropagateVars for TemplatedString<T>
-where
-    T::VarsAllowed: OK,
-{
+impl<T: TemplateType<VarsAllowed = True>> PropagateVars for TemplatedString<T> {
     type Data<VD: Bool> = Self;
 
     fn insert_vars(
@@ -511,10 +512,7 @@ where
     }
 }
 
-impl<T: TemplateType> TemplatedString<T>
-where
-    T::EnvsAllowed: OK,
-{
+impl<T: TemplateType<EnvsAllowed = True>> TemplatedString<T> {
     fn insert_env_vars(self, evars: &BTreeMap<String, String>) -> Result<Self, MissingEnvVar> {
         self.0
             .into_iter()
@@ -601,6 +599,19 @@ mod helpers {
     /// Uninhabited type that makes enum variants containing it to be inaccessible.
     #[derive(Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
     pub enum False {}
+
+    impl False {
+        // last line is only unreachable in debug builds
+        #[allow(unreachable_code)]
+        pub fn no(&self) -> ! {
+            #[cfg(debug_assertions)]
+            {
+                log::error!("somthing has gone horribly wrong");
+                panic!("managed to call no() on a False");
+            }
+            unsafe { std::hint::unreachable_unchecked() }
+        }
+    }
 
     /// Trait for trying to get a Default value. Serde itself has no solution (that I could find)
     /// that directly allows making specific enum variants inaccessible, so this is to make
