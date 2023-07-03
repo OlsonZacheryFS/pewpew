@@ -1,6 +1,6 @@
 use crate::common::ProviderSend;
 
-use self::error::{InvalidForLoadTest, LoadTestGenError, MissingEnvVar, VarsError};
+use self::error::{EnvsError, InvalidForLoadTest, LoadTestGenError, VarsError};
 use self::templating::{Bool, EnvsOnly, False, Template, True};
 use itertools::Itertools;
 use serde::Deserialize;
@@ -100,7 +100,7 @@ fn get_var_at_path<'a>(vars: &'a Vars<True>, path: &str) -> Option<&'a VarValue<
 fn insert_env_vars(
     v: Vars<False>,
     evars: &BTreeMap<String, String>,
-) -> Result<Vars<True>, MissingEnvVar> {
+) -> Result<Vars<True>, EnvsError> {
     v.into_iter()
         .map(|(k, v)| Ok((k, v.insert_env_vars(evars)?)))
         .collect()
@@ -110,7 +110,7 @@ impl VarValue<False> {
     fn insert_env_vars(
         self,
         evars: &BTreeMap<String, String>,
-    ) -> Result<VarValue<True>, MissingEnvVar> {
+    ) -> Result<VarValue<True>, EnvsError> {
         match self {
             Self::Map(v) => insert_env_vars(v, evars).map(VarValue::Map),
             Self::List(v) => v
@@ -217,7 +217,7 @@ impl LoadTest<False, False> {
     fn insert_env_vars(
         self,
         evars: &BTreeMap<String, String>,
-    ) -> Result<LoadTest<False, True>, MissingEnvVar> {
+    ) -> Result<LoadTest<False, True>, EnvsError> {
         let Self {
             config,
             load_pattern,

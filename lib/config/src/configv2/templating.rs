@@ -12,7 +12,7 @@
 //! associated type is False.
 
 use super::{
-    error::{CreateExprError, EvalExprError, IntoStreamError, MissingEnvVar, VarsError},
+    error::{CreateExprError, EnvsError, EvalExprError, IntoStreamError, MissingEnvVar, VarsError},
     scripting::EvalExpr,
     PropagateVars,
 };
@@ -314,7 +314,7 @@ impl<VD: Bool> Template<String, EnvsOnly, VD, False> {
     pub(crate) fn insert_env_vars(
         self,
         evars: &BTreeMap<String, String>,
-    ) -> Result<Template<String, EnvsOnly, VD, True>, MissingEnvVar> {
+    ) -> Result<Template<String, EnvsOnly, VD, True>, EnvsError> {
         match self {
             Self::Literal { value } => Ok(Template::Literal { value }),
             Self::Env {
@@ -499,27 +499,44 @@ impl<T: TemplateType<VarsAllowed = True, EnvsAllowed = False>> PropagateVars
                     .ok_or_else(|| super::VarsError::VarNotFound(v))
                     .map(|v| Segment::Raw(v.to_string())),
                 Segment::Env(_, no) => no.no(),
-                Segment::Expr(v, True) => Ok(Segment::Expr(
-                    v.into_iter()
+                Segment::Expr(v, True) => {
+                    let mut has_prov = false;
+                    let v = v
+                        .into_iter()
                         .map(|s| match s {
                             Segment::Env(_, no) => no.no(),
                             Segment::Expr(_, no) => no.no(),
                             Segment::Var(v, True) => super::get_var_at_path(vars, &v)
                                 .ok_or_else(|| super::VarsError::VarNotFound(v))
                                 .map(|v| Segment::Raw(v.to_string())),
+                            Segment::Prov(p, b) => {
+                                has_prov = true;
+                                Ok(Segment::Prov(p, b))
+                            }
                             other => Ok(other),
                         })
-                        .collect::<Result<_, _>>()?,
-                    True,
-                )),
+                        .collect::<Result<_, _>>()?;
+                    if has_prov {
+                        Ok(Segment::Expr(v, True))
+                    } else {
+                        let code = v
+                            .into_iter()
+                            .map(|s| match s {
+                                Segment::Raw(s) => s,
+                                _ => unreachable!(),
+                            })
+                            .collect::<String>();
+                        Ok(Segment::Raw(super::scripting::eval_direct(&code)?))
+                    }
+                }
                 other => Ok(other),
             })
             .collect()
     }
 }
 
-impl<T: TemplateType<EnvsAllowed = True>> TemplatedString<T> {
-    fn insert_env_vars(self, evars: &BTreeMap<String, String>) -> Result<Self, MissingEnvVar> {
+impl TemplatedString<EnvsOnly> {
+    fn insert_env_vars(self, evars: &BTreeMap<String, String>) -> Result<Self, EnvsError> {
         self.0
             .into_iter()
             .map(|p| match p {
@@ -527,20 +544,24 @@ impl<T: TemplateType<EnvsAllowed = True>> TemplatedString<T> {
                     .get(&e)
                     .cloned()
                     .map(Segment::Raw)
-                    .ok_or_else(|| MissingEnvVar(e)),
+                    .ok_or_else(|| MissingEnvVar(e).into()),
                 Segment::Expr(x, True) => x
                     .into_iter()
                     .map(|s| match s {
                         Segment::Expr(_, no) => no.no(),
+                        Segment::Var(_, no) => no.no(),
+                        Segment::Prov(_, no) => no.no(),
                         Segment::Env(e, True) => evars
                             .get(&e)
+                            .cloned()
                             // make the String into a valid code literal
-                            .map(|ev| Segment::Raw(format!("\"{}\"", ev.escape_default())))
-                            .ok_or_else(|| MissingEnvVar(e)),
-                        other => Ok(other),
+                            .map(|ev| format!("\"{}\"", ev.escape_default()))
+                            .ok_or_else(|| MissingEnvVar(e).into()),
+                        Segment::Raw(s) => Ok(s),
                     })
-                    .collect::<Result<Vec<_>, _>>()
-                    .map(|x| Segment::Expr(x, True)),
+                    .collect::<Result<String, _>>()
+                    .and_then(|x| super::scripting::eval_direct(&x).map_err(Into::into))
+                    .map(Segment::Raw),
                 other => Ok(other),
             })
             .collect()
@@ -715,5 +736,64 @@ mod helpers {
         type EnvsAllowed = False;
         type VarsAllowed = True;
         type ProvAllowed = True;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{
+        super::{VarValue, Vars},
+        *,
+    };
+
+    #[test]
+    fn env_insert() {
+        let raw = "${e:PORT}/${x:parseInt(${e:DATA}) + 1}";
+        let template: Template<String, EnvsOnly, True, False> = serde_yaml::from_str(raw).unwrap();
+        let evars: BTreeMap<_, _> = [
+            ("PORT".to_owned(), "5555".to_owned()),
+            ("DATA".to_owned(), "1".to_owned()),
+        ]
+        .into();
+        let template = template.insert_env_vars(&evars).unwrap();
+        assert_eq!(template.get(), "5555/2");
+    }
+
+    #[test]
+    fn vars_insert() {
+        let raw = "${v:a}--${x:${v:b}[0] + ${v:b.1} + parseInt(${v:c.d}) + ${v:c}.e}";
+        let template: Template<String, VarsOnly, False, True> = serde_yaml::from_str(raw).unwrap();
+        let vars = Vars::<True>::from([
+            ("a".to_owned(), VarValue::Bool(true)),
+            (
+                "b".to_owned(),
+                VarValue::List(vec![VarValue::Num(45), VarValue::Num(23)]),
+            ),
+            (
+                "c".to_owned(),
+                VarValue::Map(
+                    [
+                        (
+                            "d".to_owned(),
+                            VarValue::Str(Template::new_literal("77".to_owned())),
+                        ),
+                        ("e".to_owned(), VarValue::Num(12)),
+                        ("e1".to_owned(), VarValue::Num(999)),
+                    ]
+                    .into(),
+                ),
+            ),
+        ]);
+        let template = template.insert_vars(&vars).unwrap();
+        assert_eq!(template.get(), "true--157");
+
+        let raw = "${v:a}--${x:${v:b.0} + 1}--${x:${v:c}[${p:bar} + 1]}";
+        let template: Template<String, Regular, False, True> = serde_yaml::from_str(raw).unwrap();
+        let template = template.insert_vars(&vars).unwrap();
+        assert_eq!(template.evaluate_with_star(), "true--46--*");
+        let prov_data = Cow::<serde_json::Value>::Owned(json!({"bar": "e"}));
+        assert_eq!(template.evaluate(prov_data).unwrap(), "true--46--999");
     }
 }

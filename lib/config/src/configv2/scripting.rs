@@ -28,6 +28,14 @@ pub trait ProviderStream<Ar: Clone + Send + Unpin + 'static> {
     fn as_stream(&self) -> ProviderStreamStream<Ar, Self::Err>;
 }
 
+pub fn eval_direct(code: &str) -> Result<String, EvalExprError> {
+    get_default_context()
+        .eval(code)
+        .map_err(EvalExprErrorInner::ExecutionError)
+        .map_err(Into::into)
+        .map(|js| js.display().to_string())
+}
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct EvalExpr {

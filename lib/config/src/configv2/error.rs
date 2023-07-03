@@ -7,7 +7,7 @@ pub enum LoadTestGenError {
     #[error("error parsing yaml: {0}")]
     YamlParse(#[from] Arc<serde_yaml::Error>),
     #[error("{0}")]
-    MissingEnvVar(#[from] MissingEnvVar),
+    Envs(#[from] EnvsError),
     #[error("error inserting static vars: {0}")]
     VarsError(#[from] VarsError),
 }
@@ -27,6 +27,14 @@ impl From<serde_yaml::Error> for LoadTestGenError {
 }
 
 #[derive(Debug, Error, Clone)]
+pub enum EnvsError {
+    #[error(transparent)]
+    MissingVar(#[from] MissingEnvVar),
+    #[error(transparent)]
+    EvalExpr(#[from] EvalExprError),
+}
+
+#[derive(Debug, Error, Clone)]
 #[error("missing environment variable {0}")]
 pub struct MissingEnvVar(pub(crate) String);
 
@@ -43,6 +51,8 @@ pub enum VarsError {
     },
     #[error("{0}")]
     CreateExpr(#[from] CreateExprError),
+    #[error("{0}")]
+    EvalExpr(#[from] EvalExprError),
 }
 
 #[derive(Debug, Error, Clone)]
