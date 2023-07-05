@@ -58,8 +58,8 @@ The `endpoints` section declares what HTTP endpoints will be called during a tes
   ```yaml
     tags:
       name: Subscribe
-      # TODO: update this once tags are fixed
-      status: ${response.status}
+      # TODO: confirm that this is correct
+      status: ${x:${p:response}.status}
   ```
 
   A new group of aggregated stats will be created for every status code returned by the endpoint.
