@@ -1,6 +1,6 @@
 use super::*;
 
-use config::templating::VarsOnly;
+use config::templating::Regular;
 use futures::TryStreamExt;
 
 pub(super) struct ResponseHandler {
@@ -9,7 +9,7 @@ pub(super) struct ResponseHandler {
     pub(super) outgoing: Arc<Vec<Outgoing>>,
     pub(super) now: Instant,
     pub(super) stats_tx: StatsTx,
-    pub(super) tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
+    pub(super) tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
 }
 
 impl ResponseHandler {

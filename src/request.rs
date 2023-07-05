@@ -43,7 +43,7 @@ use config::{
     endpoints::MultiPartBodySection,
     query::Query,
     scripting::{ProviderStream, ProviderStreamStream},
-    templating::{Regular, Template, True, VarsOnly},
+    templating::{Regular, Template, True},
     EndPointBody,
 };
 
@@ -442,10 +442,8 @@ fn multipart_body_as_hyper_body(
                 EndPointBody::String(t) => (t, None),
                 EndPointBody::Multipart(_) => todo!("make unreachable"),
             };
-            let mut body = template
-                .evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/)
-                .expect("TODO");
-            //.map_err(TestError::from)?;
+            let mut body =
+                template.evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/)?;
 
             let mut has_content_disposition = false;
 
@@ -456,10 +454,7 @@ fn multipart_body_as_hyper_body(
             for (k, t) in mp.headers.iter() {
                 let key = HeaderName::from_bytes(k.as_bytes())
                     .map_err::<TestError, _>(|e| RecoverableError::BodyErr(Arc::new(e)).into())?;
-                let value = t
-                    .evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/)
-                    .expect("TODO");
-                //.map_err::<TestError, _>(Into::into)?;
+                let value = t.evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/)?;
                 let value = HeaderValue::from_str(&value)
                     .map_err::<TestError, _>(|e| RecoverableError::BodyErr(Arc::new(e)).into())?;
 
@@ -619,7 +614,7 @@ pub struct Endpoint {
     on_demand_streams: OnDemandStreams,
     outgoing: Vec<Outgoing>,
     provides: Vec<Outgoing>,
-    tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
+    tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
     stats_tx: StatsTx,
     stream_collection: StreamCollection,
     timeout: Duration,

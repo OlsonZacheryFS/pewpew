@@ -3,7 +3,7 @@ use crate::stats;
 
 use config::{
     common::ProviderSend,
-    templating::{Template, True, VarsOnly},
+    templating::{Regular, Template, True},
 };
 use ether::EitherExt;
 use futures::{
@@ -14,6 +14,7 @@ use log::debug;
 use serde_json as json;
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     future::Future,
     sync::Arc,
@@ -29,7 +30,7 @@ pub(super) struct BodyHandler {
     pub(super) provider_delays: ProviderDelays,
     pub(super) stats_tx: StatsTx,
     pub(super) status: u16,
-    pub(super) tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
+    pub(super) tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
     pub(super) template_values: TemplateValues,
 }
 
@@ -69,10 +70,9 @@ impl BodyHandler {
             .tags
             .iter()
             .filter_map(|(k, t)| {
-                /*t.evaluate(Cow::Borrowed(&*template_values), None)
-                .ok()
-                .map(|v| (k.clone(), v))*/
-                Some((k.clone(), t.get().clone()))
+                t.evaluate(Cow::Borrowed(&*template_values))
+                    .ok()
+                    .map(|v| (k.clone(), v))
             })
             .collect();
         let tags = Arc::new(tags);

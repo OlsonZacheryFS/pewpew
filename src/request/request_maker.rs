@@ -3,7 +3,7 @@ use crate::stats;
 
 use config::{
     self,
-    templating::{Regular, Template, True, VarsOnly},
+    templating::{Regular, Template, True},
     EndPointBody,
 };
 use ether::EitherExt;
@@ -46,7 +46,7 @@ pub(super) struct RequestMaker {
     pub(super) stats_tx: StatsTx,
     pub(super) no_auto_returns: bool,
     pub(super) outgoing: Arc<Vec<Outgoing>>,
-    pub(super) tags: Arc<BTreeMap<String, Template<String, VarsOnly, True>>>,
+    pub(super) tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
     pub(super) timeout: Duration,
 }
 
@@ -326,10 +326,10 @@ impl RequestMaker {
                 let tags = tags2
                     .iter()
                     .filter_map(|(k, v)| {
-                        /*v.evaluate(Cow::Borrowed(template_values2.as_json()), None)
-                        .ok()
-                        .map(move |v| (k.clone(), v))*/
-                        Some((k.clone(), v.get().clone()))
+                        v.evaluate(Cow::Borrowed(template_values2.as_json()))
+                            .ok()
+                            .map(move |v| (k.clone(), v))
+                        //Some((k.clone(), v.get().clone()))
                     })
                     .collect();
                 let tags = Arc::new(tags);
