@@ -15,7 +15,7 @@ The following available sources are:
   
   Example: `${e:PORT}`
 
-- `"v"`: A variable value from the `vars` section. For nested values, keys/indices are separated by `"."`.
+- `"v"`: A variable value from the [vars section](../vars-section.md). For nested values, keys/indices are separated by `"."`.
   
   Example:
 
@@ -42,7 +42,7 @@ The following available sources are:
   - `${v:c}` will be `{ "e": "hello" }`
   - `${v:d.f}` will be `[false, false, true]`
 
-- `"p"`: A value from a provider of the specified name.
+- `"p"`: A value from a [provider](../providers-section.md) of the specified name.
   
   Example: `${p:foo}` will be a single json value read from a provider named `"foo"`
 
@@ -64,8 +64,9 @@ template. All template types can use expressions (`${x:_}`), but the others are 
 types of templates are:
 
 - E-Templates: Only values from the Environment Variables can be read from.
-- V-Templates: Only values from the `vars` section can be read from.
-- R-Templates (Regular Templates): Providers or `vars` values can be read from.
+- V-Templates: Only values from the [vars section](../vars-section.md) can be read from.
+- R-Templates (Regular Templates): [Providers](../providers-section.md) or
+  [vars](../vars-section.md) values can be read from.
 
 ## Examples
 
@@ -96,4 +97,4 @@ types of templates are:
   to the string `"300"`.
 
 - E-Templates exclusively appear in the `vars` section. R-Templates are used for building the
-  requests, and primrily appear in the `endpoints` section.
+  requests, and primarily appear in the [endpoints section](../endpoints-section.md).
