@@ -10,6 +10,7 @@
   - [loggers section](./config/loggers-section.md)
   - [endpoints section](./config/endpoints-section.md)
   - [Common types](./config/common-types.md)
+    - [Templates](./config/common-types/templates.md)
     - [Expressions](./config/common-types/expressions.md)
 - [Command-line options](./cli.md)
 - [Viewing results](./viewing-results.md)

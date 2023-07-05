@@ -33,5 +33,3 @@ endpoints:
 ```
 specifies that an "Authorization" header will be sent with the request with a value of "Bearer " followed by a value coming from a provider named "sessionId".
 
-## Templates
-Templates are special string values which can be interpolated with [expressions](./common-types/expressions.md). Interpolation is done by enclosing the [expression](./common-types/expressions.md) in `${ }`. For example: `${foo}-bar` creates a string where a value from a provider named "foo" is interpolated before the string value `-bar`. `${join(baz, ".")}` uses the `join` helper to create a string value derived from a value coming from the provider "baz".
