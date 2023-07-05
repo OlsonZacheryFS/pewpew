@@ -30,6 +30,7 @@ pub struct Endpoint<VD: Bool = True> {
     #[serde(default)]
     pub method: Method,
     pub peak_load: Option<Template<HitsPerMinute, VarsOnly, VD>>,
+    /// TODO: make this an R-Template(?)
     #[serde(default = "BTreeMap::new")]
     pub tags: BTreeMap<String, Template<String, VarsOnly, VD>>,
     pub url: Template<String, Regular, VD>,
@@ -39,8 +40,8 @@ pub struct Endpoint<VD: Bool = True> {
     // should default
     #[serde(default)]
     pub on_demand: bool,
-    #[serde(default)]
-    pub logs: BTreeMap<String, EndpointLogs>,
+    #[serde(default, with = "tuple_vec_map")]
+    pub logs: Vec<(String, EndpointLogs)>,
     pub max_parallel_requests: Option<NonZeroUsize>,
     #[serde(default)]
     pub no_auto_returns: bool,
