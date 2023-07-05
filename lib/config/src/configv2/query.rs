@@ -19,6 +19,8 @@ use std::{
 
 use crate::error::{EvalExprError, EvalExprErrorInner};
 
+type SelectTmp = Select<String>;
+
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "QueryTmp")]
 pub struct Query(DiplomaticBag<QueryInner>);
@@ -203,17 +205,12 @@ impl QueryInner {
     }
 }
 
-#[derive(Debug)]
-enum Select {
-    Expr(Gc<CodeBlock>),
-    Map(BTreeMap<String, Self>),
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-enum SelectTmp {
-    Expr(String),
+enum Select<T = Gc<CodeBlock>> {
+    Expr(T),
     Map(BTreeMap<String, Self>),
+    List(Vec<Self>),
 }
 
 impl SelectTmp {
@@ -225,6 +222,11 @@ impl SelectTmp {
                 .map(|(k, v)| v.compile(ctx).map(|v| (k, v)))
                 .collect::<Option<BTreeMap<_, _>>>()
                 .map(Select::Map),
+            Self::List(l) => l
+                .into_iter()
+                .map(|v| v.compile(ctx))
+                .collect::<Option<Vec<_>>>()
+                .map(Select::List),
         }
     }
 }
@@ -245,6 +247,11 @@ impl Select {
 
                 Ok(obj.build().into())
             }
+            Self::List(l) => l
+                .into_iter()
+                .map(|v| v.select(ctx))
+                .collect::<JsResult<Vec<JsValue>>>()
+                .map(|arr| JsArray::from_iter(arr, ctx).into()),
         }
     }
 }
