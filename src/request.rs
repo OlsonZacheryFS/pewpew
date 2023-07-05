@@ -261,7 +261,7 @@ impl EndpointBuilder {
             max_parallel_requests, convert_to_debug(&provides), convert_to_debug(&logs), on_demand, request_timeout);
         */
 
-        let timeout = request_timeout.unwrap_or(ctx.config.client.request_timeout);
+        let timeout = request_timeout.unwrap_or_else(|| ctx.config.client.request_timeout.clone());
 
         let mut provides_set = if self.start_stream.is_none() && !provides.is_empty() {
             Some(BTreeSet::new())
@@ -381,7 +381,7 @@ impl EndpointBuilder {
             stats_tx,
             stream_collection: streams,
             url,
-            timeout: *timeout,
+            timeout: **timeout.get(),
         }
     }
 }

@@ -1,3 +1,5 @@
+use crate::templating::VarsOnly;
+
 use super::{
     templating::{Bool, False, Regular, Template, True},
     PropagateVars,
@@ -5,6 +7,7 @@ use super::{
 use derive_more::{Deref, From};
 use serde::Deserialize;
 use std::{convert::TryFrom, str::FromStr, time::Duration as SDur};
+use thiserror::Error;
 
 #[derive(Debug, Deserialize, Deref, PartialEq, Eq, From)]
 pub struct Headers<VD: Bool>(
@@ -38,18 +41,20 @@ impl PropagateVars for Headers<False> {
 }
 
 /// Newtype wrapper around [`std::time::Duration`] that allows implementing the needed traits.
-#[derive(Debug, Deserialize, PartialEq, Clone, Copy, Eq, Deref)]
-#[serde(try_from = "&str")]
+#[derive(Debug, PartialEq, Clone, Copy, Eq, Deref)]
 pub struct Duration(SDur);
 
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("'{0}' is not a valid duration")]
+pub struct DurationError(String);
+
 impl FromStr for Duration {
-    // TODO: better error reporting for Duration
-    type Err = &'static str;
+    type Err = DurationError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         crate::shared::duration_from_string(s)
             .map(Self)
-            .ok_or("invalid duration")
+            .ok_or(DurationError(s.to_owned()))
     }
 }
 

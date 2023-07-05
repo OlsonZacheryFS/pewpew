@@ -44,7 +44,7 @@ pub struct Endpoint<VD: Bool = True> {
     pub max_parallel_requests: Option<NonZeroUsize>,
     #[serde(default)]
     pub no_auto_returns: bool,
-    pub request_timeout: Option<Duration>,
+    pub request_timeout: Option<Template<Duration, VarsOnly, VD>>,
 }
 
 impl PropagateVars for Endpoint<False> {
@@ -65,7 +65,7 @@ impl PropagateVars for Endpoint<False> {
             logs: self.logs,
             max_parallel_requests: self.max_parallel_requests,
             no_auto_returns: self.no_auto_returns,
-            request_timeout: self.request_timeout,
+            request_timeout: self.request_timeout.insert_vars(vars)?,
         })
     }
 }

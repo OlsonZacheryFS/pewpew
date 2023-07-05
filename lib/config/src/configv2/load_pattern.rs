@@ -107,7 +107,7 @@ impl From<Vec<LoadPatternTemp>> for LoadPattern<False> {
                 to: Template::Literal {
                     value: Percent(0.0),
                 },
-                over: "1s".parse().unwrap(),
+                over: Template::new_literal("1s".parse().unwrap()),
             }]
             .into_iter()
             .chain(value.into_iter())
@@ -131,14 +131,14 @@ pub enum LoadPatternSingle<VD: Bool> {
     Linear {
         from: Template<Percent, VarsOnly, VD>,
         to: Template<Percent, VarsOnly, VD>,
-        over: Duration,
+        over: Template<Duration, VarsOnly, VD>,
     },
 }
 
 impl LoadPatternSingle<True> {
     fn duration(&self) -> &Duration {
         match self {
-            Self::Linear { over, .. } => over,
+            Self::Linear { over, .. } => over.get(),
         }
     }
 
@@ -149,7 +149,7 @@ impl LoadPatternSingle<True> {
     {
         let eval = |x: &Template<Percent, VarsOnly, True, True>| f(**x.get() * **peak);
         match self {
-            Self::Linear { from, to, over } => (eval(from), eval(to), over),
+            Self::Linear { from, to, over } => (eval(from), eval(to), over.get()),
         }
     }
 }
@@ -162,7 +162,7 @@ impl PropagateVars for LoadPatternSingle<False> {
             Self::Linear { from, to, over } => Ok(LoadPatternSingle::Linear {
                 from: from.insert_vars(vars)?,
                 to: to.insert_vars(vars)?,
-                over,
+                over: over.insert_vars(vars)?,
             }),
         }
     }
@@ -176,7 +176,7 @@ enum LoadPatternTemp {
     Linear {
         from: Option<Template<Percent, VarsOnly, False>>,
         to: Template<Percent, VarsOnly, False>,
-        over: Duration,
+        over: Template<Duration, VarsOnly, False>,
     },
 }
 
@@ -280,7 +280,7 @@ mod tests {
                 value: Percent(1.0)
             }
         );
-        assert_eq!(over, Duration::from_secs(5 * 60));
+        assert_eq!(over, Template::new_literal(Duration::from_secs(5 * 60)));
 
         let LoadPatternTemp::Linear { from, to, over } =
             from_yaml("!linear\n  to: 20%\n  over: 1s").unwrap();
@@ -291,7 +291,7 @@ mod tests {
                 value: Percent(0.2)
             }
         );
-        assert_eq!(over, Duration::from_secs(1));
+        assert_eq!(over, Template::new_literal(Duration::from_secs(1)));
     }
 
     #[test]
@@ -318,7 +318,7 @@ mod tests {
                 value: Percent(1.0)
             }
         );
-        assert_eq!(over, Duration::from_secs(60 * 60));
+        assert_eq!(over, Template::new_literal(Duration::from_secs(60 * 60)));
 
         static TEST2: &str = r#"
  - !linear
@@ -341,7 +341,7 @@ mod tests {
                 value: Percent(3.0)
             }
         );
-        assert_eq!(over, Duration::from_secs(5 * 60));
+        assert_eq!(over, Template::new_literal(Duration::from_secs(5 * 60)));
 
         static TEST3: &str = r#"
  - !linear
@@ -366,7 +366,7 @@ mod tests {
                 value: Percent(0.625)
             }
         );
-        assert_eq!(over, Duration::from_secs(59));
+        assert_eq!(over, Template::new_literal(Duration::from_secs(59)));
 
         let LoadPatternSingle::Linear { from, to, over } = load[1].clone();
         assert_eq!(
@@ -381,6 +381,6 @@ mod tests {
                 value: Percent(0.875)
             }
         );
-        assert_eq!(over, Duration::from_secs(22));
+        assert_eq!(over, Template::new_literal(Duration::from_secs(22)));
     }
 }

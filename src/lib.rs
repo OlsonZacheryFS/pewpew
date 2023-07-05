@@ -980,7 +980,7 @@ fn create_try_run_future(
         endpoints.append(static_tags, builder, provides_set, required_providers);
     }
 
-    let client = create_http_client(*config_config.client.keepalive)?;
+    let client = create_http_client(**config_config.client.keepalive.get())?;
 
     // create the stats channel
     let test_complete = BroadcastStream::new(test_ended_tx.subscribe());
@@ -1071,7 +1071,7 @@ fn create_load_test_future(
         })
         .collect();
 
-    let client = create_http_client(*config_config.client.keepalive)?;
+    let client = create_http_client(**config_config.client.keepalive.get())?;
 
     let builder_ctx = request::BuilderContext {
         config: config_config,
