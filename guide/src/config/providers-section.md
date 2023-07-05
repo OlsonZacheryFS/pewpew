@@ -38,12 +38,10 @@ There are four *provider_type*s: [file](#file), [response](#response), [list](#l
 The `file` *provider_type* reads data from a file. Every line in the file is read
 as a value. A `file` provider has the following parameters:
 
-- **`path`** - A [template](./common-types.md#templates) value indicating the path
-    to the file on the file system. Unlike templates used elsewhere, only variables
-    defined in the [vars section](./vars-section.md) can be interopolated. When a
-    relative path is specified it is interpreted as relative to the config file.
-    Absolute paths are supported though discouraged as they prevent the config file
-    from being platform agnostic.
+- **`path`** - A [V-Template](./common-types/templates.md#template-types) value indicating the path
+    to the file on the file system. When a relative path is specified it is interpreted as
+    relative to the config file. Absolute paths are supported though discouraged as they prevent
+    the config file from being platform agnostic.
 - **`repeat`** - <sub><sup>*Optional*</sup></sub> A boolean value which when `true`
     indicates when the provider `file` provider gets to the end of the file it should
     start back at the beginning. Defaults to `false`.
