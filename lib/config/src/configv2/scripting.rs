@@ -342,6 +342,18 @@ mod tests {
             serde_json::json!([10, 9, 8, 7, 6, 5, 4, 3, 2])
         );
     }
+
+    #[test]
+    fn replace_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
+        assert_eq!(
+            ctx.eval(r#"replace("foo", {"foo": "baz", "zed": ["abc", 123, "fooo"]}, "bar")"#)
+                .unwrap()
+                .to_json(&mut ctx)
+                .unwrap(),
+            serde_json::json!({"bar": "baz", "zed": ["abc", 123, "baro"]})
+        )
+    }
 }
 
 pub use builtins::get_default_context;
@@ -367,6 +379,7 @@ mod builtins {
     use helper::{AnyAsString, NumType, OrNull};
     use rand::{thread_rng, Rng};
     use scripting_macros::boa_fn;
+    use serde_json::Value as SJV;
     use std::cmp::Ordering;
     // use std::str::FromStr;
 
@@ -392,25 +405,17 @@ mod builtins {
     }
 
     #[boa_fn]
-    fn entries(value: serde_json::Value) -> serde_json::Value {
-        fn collect<
-            K: Into<serde_json::Value>,
-            V: Into<serde_json::Value>,
-            I: IntoIterator<Item = (K, V)>,
-        >(
-            iter: I,
-        ) -> serde_json::Value {
+    fn entries(value: SJV) -> SJV {
+        fn collect<K: Into<SJV>, V: Into<SJV>, I: IntoIterator<Item = (K, V)>>(iter: I) -> SJV {
             iter.into_iter()
-                .map(|(k, v)| serde_json::Value::Array(vec![k.into(), v.into()]))
+                .map(|(k, v)| SJV::Array(vec![k.into(), v.into()]))
                 .collect::<Vec<_>>()
                 .into()
         }
         match value {
-            serde_json::Value::Array(a) => collect(a.into_iter().enumerate()),
-            serde_json::Value::Object(o) => collect(o),
-            serde_json::Value::String(s) => {
-                collect(s.chars().enumerate().map(|(i, c)| (i, c.to_string())))
-            }
+            SJV::Array(a) => collect(a.into_iter().enumerate()),
+            SJV::Object(o) => collect(o),
+            SJV::String(s) => collect(s.chars().enumerate().map(|(i, c)| (i, c.to_string()))),
             other => other,
         }
     }
@@ -461,6 +466,26 @@ mod builtins {
     }
 
     #[boa_fn]
+    fn replace(needle: &str, haystack: SJV, replacer: &str) -> SJV {
+        let n = needle;
+        let r = replacer;
+        match haystack {
+            SJV::String(s) => SJV::String(s.replace(n, r)),
+            SJV::Array(a) => a
+                .into_iter()
+                .map(|v| replace(n, v, r))
+                .collect::<Vec<_>>()
+                .into(),
+            SJV::Object(m) => SJV::Object(
+                m.into_iter()
+                    .map(|(k, v)| (k.replace(n, r), replace(n, v, r)))
+                    .collect(),
+            ),
+            other => other,
+        }
+    }
+
+    #[boa_fn]
     fn start_pad(s: AnyAsString, min_length: i64, pad_string: &str) -> String {
         use unicode_segmentation::UnicodeSegmentation;
         let s = s.get();
@@ -482,7 +507,7 @@ mod builtins {
         use std::fmt::Display;
 
         pub(super) trait JsInput<'a>: Sized + 'a {
-            fn from_js(js: &'a JsValue, ctx: &'a mut Context) -> JsResult<Self>;
+            fn from_js(js: &'a JsValue, ctx: &mut Context) -> JsResult<Self>;
         }
 
         impl JsInput<'_> for serde_json::Value {
@@ -492,13 +517,13 @@ mod builtins {
         }
 
         impl<'a, T: JsInput<'a>> JsInput<'a> for Option<T> {
-            fn from_js(js: &'a JsValue, ctx: &'a mut Context) -> JsResult<Self> {
+            fn from_js(js: &'a JsValue, ctx: &mut Context) -> JsResult<Self> {
                 Ok(T::from_js(js, ctx).ok())
             }
         }
 
         impl<'a> JsInput<'a> for &'a str {
-            fn from_js(js: &'a JsValue, ctx: &'a mut Context) -> JsResult<Self> {
+            fn from_js(js: &'a JsValue, ctx: &mut Context) -> JsResult<Self> {
                 Ok(js
                     .as_string()
                     .ok_or_else(|| ctx.construct_type_error("not a string"))?
