@@ -266,6 +266,29 @@ mod tests {
             .to_owned();
         assert_eq!(ep.len(), 19);
         assert_eq!(&ep[..1], "1");
+
+        assert_eq!(
+            ctx.eval(r#"entries({"foo": "bar", "baz": 123})"#)
+                .unwrap()
+                .to_json(&mut ctx)
+                .unwrap(),
+            serde_json::json!([["foo", "bar"], ["baz", 123]])
+        );
+        assert_eq!(
+            ctx.eval(r#"entries(["abc", "def"])"#)
+                .unwrap()
+                .to_json(&mut ctx)
+                .unwrap(),
+            serde_json::json!([[0, "abc"], [1, "def"]])
+        );
+        assert_eq!(
+            ctx.eval(r#"entries("xyz")"#)
+                .unwrap()
+                .to_json(&mut ctx)
+                .unwrap(),
+            serde_json::json!([[0, "x"], [1, "y"], [2, "z"]])
+        );
+        assert_eq!(ctx.eval("entries(null)"), Ok(JsValue::Null));
     }
 }
 
@@ -312,6 +335,30 @@ mod builtins {
 
         s.push_str(&pad_chars);
         s
+    }
+
+    #[boa_fn]
+    fn entries(value: serde_json::Value) -> serde_json::Value {
+        fn collect<
+            K: Into<serde_json::Value>,
+            V: Into<serde_json::Value>,
+            I: IntoIterator<Item = (K, V)>,
+        >(
+            iter: I,
+        ) -> serde_json::Value {
+            iter.into_iter()
+                .map(|(k, v)| serde_json::Value::Array(vec![k.into(), v.into()]))
+                .collect::<Vec<_>>()
+                .into()
+        }
+        match value {
+            serde_json::Value::Array(a) => collect(a.into_iter().enumerate()),
+            serde_json::Value::Object(o) => collect(o),
+            serde_json::Value::String(s) => {
+                collect(s.chars().enumerate().map(|(i, c)| (i, c.to_string())))
+            }
+            other => other,
+        }
     }
 
     #[boa_fn]
@@ -363,6 +410,12 @@ mod builtins {
 
         pub(super) trait JsInput<'a>: Sized + 'a {
             fn from_js(js: &'a JsValue, ctx: &'a mut Context) -> JsResult<Self>;
+        }
+
+        impl JsInput<'_> for serde_json::Value {
+            fn from_js(js: &JsValue, ctx: &mut Context) -> JsResult<Self> {
+                js.to_json(ctx)
+            }
         }
 
         impl<'a, T: JsInput<'a>> JsInput<'a> for Option<T> {
@@ -421,6 +474,12 @@ mod builtins {
 
         pub(super) trait AsJsResult {
             fn as_js_result(self, _: &mut Context) -> JsResult<JsValue>;
+        }
+
+        impl AsJsResult for serde_json::Value {
+            fn as_js_result(self, ctx: &mut Context) -> JsResult<JsValue> {
+                JsValue::from_json(&self, ctx)
+            }
         }
 
         impl AsJsResult for f64 {
