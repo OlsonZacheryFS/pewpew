@@ -228,6 +228,44 @@ mod tests {
             ctx.eval(r#"encode("foo=bar", "percent-userinfo")"#),
             Ok(JsValue::String("foo%3Dbar".into()))
         );
+
+        // These tests will break in May of 2033, when the timestamp reaches 2000000000
+        let ep = ctx
+            .eval(r#"epoch("s")"#)
+            .unwrap()
+            .as_string()
+            .unwrap()
+            .as_str()
+            .to_owned();
+        assert_eq!(ep.len(), 10);
+        assert_eq!(&ep[..1], "1");
+        let ep = ctx
+            .eval(r#"epoch("ms")"#)
+            .unwrap()
+            .as_string()
+            .unwrap()
+            .as_str()
+            .to_owned();
+        assert_eq!(ep.len(), 13);
+        assert_eq!(&ep[..1], "1");
+        let ep = ctx
+            .eval(r#"epoch("mu")"#)
+            .unwrap()
+            .as_string()
+            .unwrap()
+            .as_str()
+            .to_owned();
+        assert_eq!(ep.len(), 16);
+        assert_eq!(&ep[..1], "1");
+        let ep = ctx
+            .eval(r#"epoch("ns")"#)
+            .unwrap()
+            .as_string()
+            .unwrap()
+            .as_str()
+            .to_owned();
+        assert_eq!(ep.len(), 19);
+        assert_eq!(&ep[..1], "1");
     }
 }
 
@@ -250,7 +288,7 @@ mod builtins {
     //!
     //! IMPORTANT: Do **NOT** let these functions panic if at all possible
 
-    use crate::shared::encode::Encoding;
+    use crate::shared::{encode::Encoding, Epoch};
     use helper::{AnyAsString, OrNull};
     use scripting_macros::boa_fn;
     // use std::str::FromStr;
@@ -274,6 +312,11 @@ mod builtins {
 
         s.push_str(&pad_chars);
         s
+    }
+
+    #[boa_fn]
+    fn epoch(e: Epoch) -> String {
+        e.get().to_string()
     }
 
     #[boa_fn(jsname = "parseInt")]
@@ -314,7 +357,7 @@ mod builtins {
     }
 
     mod helper {
-        use crate::shared::encode::Encoding;
+        use crate::shared::{encode::Encoding, Epoch};
         use boa_engine::{object::JsArray, Context, JsResult, JsValue};
         use std::fmt::Display;
 
@@ -351,6 +394,14 @@ mod builtins {
                 let s: &str = JsInput::from_js(js, ctx)?;
                 s.parse()
                     .map_err(|_| ctx.construct_type_error("invalid string for Encoding"))
+            }
+        }
+
+        impl JsInput<'_> for Epoch {
+            fn from_js(js: &JsValue, ctx: &mut Context) -> JsResult<Self> {
+                let s: &str = JsInput::from_js(js, ctx)?;
+                s.parse()
+                    .map_err(|_| ctx.construct_type_error("invalid string for Epoch"))
             }
         }
 
