@@ -175,12 +175,16 @@ mod tests {
     use boa_engine::{object::JsArray, Context, JsValue};
 
     #[test]
-    fn test_default_context() {
+    fn parse_funcs() {
         let mut ctx: Context = super::builtins::get_default_context();
         assert_eq!(ctx.eval(r#"parseInt("5")"#), Ok(JsValue::Integer(5)));
         assert_eq!(ctx.eval(r#"parseFloat("5.1")"#), Ok(JsValue::Rational(5.1)));
         assert_eq!(ctx.eval(r#"parseFloat("e")"#), Ok(JsValue::Null));
+    }
 
+    #[test]
+    fn reapeat_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
         let rep_arr = ctx.eval(r#"repeat(3)"#).unwrap();
         let rep_arr = rep_arr.as_object().unwrap();
         assert!(rep_arr.is_array());
@@ -189,7 +193,11 @@ mod tests {
             assert_eq!(rep_arr.pop(&mut ctx).unwrap(), JsValue::Null);
         }
         assert_eq!(rep_arr.pop(&mut ctx).unwrap(), JsValue::Undefined);
+    }
 
+    #[test]
+    fn pad_fns() {
+        let mut ctx: Context = super::builtins::get_default_context();
         assert_eq!(
             ctx.eval(r#"end_pad("foo", 6, "bar")"#),
             Ok(JsValue::String("foobar".into()))
@@ -228,6 +236,11 @@ mod tests {
             ctx.eval(r#"encode("foo=bar", "percent-userinfo")"#),
             Ok(JsValue::String("foo%3Dbar".into()))
         );
+    }
+
+    #[test]
+    fn epoch_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
 
         // These tests will break in May of 2033, when the timestamp reaches 2000000000
         let ep = ctx
@@ -266,7 +279,11 @@ mod tests {
             .to_owned();
         assert_eq!(ep.len(), 19);
         assert_eq!(&ep[..1], "1");
+    }
 
+    #[test]
+    fn entries_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
         assert_eq!(
             ctx.eval(r#"entries({"foo": "bar", "baz": 123})"#)
                 .unwrap()
@@ -289,7 +306,11 @@ mod tests {
             serde_json::json!([[0, "x"], [1, "y"], [2, "z"]])
         );
         assert_eq!(ctx.eval("entries(null)"), Ok(JsValue::Null));
+    }
 
+    #[test]
+    fn random_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
         // not testing value ranges, just int * int -> int
         assert!(matches!(
             ctx.eval(r#"random(1, 4)"#),
