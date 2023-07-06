@@ -189,6 +189,23 @@ mod tests {
             assert_eq!(rep_arr.pop(&mut ctx).unwrap(), JsValue::Null);
         }
         assert_eq!(rep_arr.pop(&mut ctx).unwrap(), JsValue::Undefined);
+
+        assert_eq!(
+            ctx.eval(r#"end_pad("foo", 6, "bar")"#),
+            Ok(JsValue::String("foobar".into()))
+        );
+        assert_eq!(
+            ctx.eval(r#"end_pad("foo", 7, "bar")"#),
+            Ok(JsValue::String("foobarb".into()))
+        );
+        assert_eq!(
+            ctx.eval(r#"end_pad("foo", 1, "fsdajlkvshduva")"#),
+            Ok(JsValue::String("foo".into()))
+        );
+        assert_eq!(
+            ctx.eval(r#"end_pad("foo", 4, "")"#),
+            Ok(JsValue::String("foo".into()))
+        );
     }
 }
 
@@ -203,7 +220,7 @@ mod builtins {
     //! For the function to be properly handled and callable:
     //!
     //! - Any input type `T` must implement `JsInput`.
-    //! - Any output type `O`, must be implement `AsJsResult`.
+    //! - Any output type `O` must implement `AsJsResult`.
     //! - The `#[boa_fn]` attribute macro must be applied. A `jsname` parameter
     //!   may also be provided to set the name that this function will be callable
     //!   from the JS runtime as; with no `jsname`, the default will be the
@@ -211,9 +228,25 @@ mod builtins {
     //!
     //! IMPORTANT: Do **NOT** let these functions panic if at all possible
 
-    use helper::OrNull;
+    use helper::{AnyAsString, OrNull};
     use scripting_macros::boa_fn;
     // use std::str::FromStr;
+
+    #[boa_fn]
+    fn end_pad(s: AnyAsString, min_length: i64, pad_string: &str) -> String {
+        use unicode_segmentation::UnicodeSegmentation;
+        let mut s = s.get();
+        let needed_chars = (min_length as usize).saturating_sub(s.len());
+
+        let pad_chars: String = pad_string
+            .graphemes(true)
+            .cycle()
+            .take(needed_chars)
+            .collect();
+
+        s.push_str(&pad_chars);
+        s
+    }
 
     #[boa_fn(jsname = "parseInt")]
     pub fn parse_int(s: &str) -> OrNull<i64> {
@@ -268,8 +301,40 @@ mod builtins {
             }
         }
 
+        pub(super) struct AnyAsString(String);
+
+        impl JsInput<'_> for AnyAsString {
+            fn from_js(js: &JsValue, ctx: &mut Context) -> JsResult<Self> {
+                Ok(Self(js.to_string(ctx)?.as_str().to_owned()))
+            }
+        }
+
+        impl AnyAsString {
+            pub fn get(self) -> String {
+                self.0
+            }
+        }
+
         pub(super) trait AsJsResult {
             fn as_js_result(self, _: &mut Context) -> JsResult<JsValue>;
+        }
+
+        impl AsJsResult for f64 {
+            fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
+                Ok(JsValue::Rational(self))
+            }
+        }
+
+        impl AsJsResult for i64 {
+            fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
+                Ok(JsValue::Integer(self as i32))
+            }
+        }
+
+        impl AsJsResult for String {
+            fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
+                Ok(JsValue::String(self.into()))
+            }
         }
 
         pub struct OrNull<T>(pub(super) Option<T>);
@@ -280,30 +345,24 @@ mod builtins {
             }
         }
 
-        impl<T: Into<JsValue>> AsJsResult for OrNull<T> {
-            fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
-                Ok(self.0.map_or(JsValue::Null, Into::into))
+        impl<T: AsJsResult> AsJsResult for OrNull<T> {
+            fn as_js_result(self, ctx: &mut Context) -> JsResult<JsValue> {
+                Ok(self.0.as_js_result(ctx).unwrap_or(JsValue::Null))
             }
         }
 
-        impl<T> AsJsResult for Option<T>
-        where
-            JsValue: From<T>,
-        {
-            fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
-                self.map(JsValue::from)
+        impl<T: AsJsResult> AsJsResult for Option<T> {
+            fn as_js_result(self, ctx: &mut Context) -> JsResult<JsValue> {
+                self.map(|x| x.as_js_result(ctx))
+                    .transpose()?
                     .ok_or_else(|| JsValue::String("missing value".into()))
             }
         }
 
-        impl<T, E> AsJsResult for Result<T, E>
-        where
-            JsValue: From<T>,
-            E: Display,
-        {
-            fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
-                self.map(JsValue::from)
-                    .map_err(|e| JsValue::String(e.to_string().into()))
+        impl<T: AsJsResult, E: Display> AsJsResult for Result<T, E> {
+            fn as_js_result(self, ctx: &mut Context) -> JsResult<JsValue> {
+                self.map_err(|e| JsValue::String(e.to_string().into()))
+                    .and_then(|x| x.as_js_result(ctx))
             }
         }
 
