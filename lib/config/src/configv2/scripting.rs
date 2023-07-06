@@ -426,13 +426,13 @@ mod builtins {
     }
 
     #[boa_fn(jsname = "parseInt")]
-    pub fn parse_int(s: &str) -> OrNull<i64> {
-        s.parse().ok().into()
+    fn parse_int(s: AnyAsString) -> OrNull<i64> {
+        s.get().parse().ok().into()
     }
 
     #[boa_fn(jsname = "parseFloat")]
-    pub fn parse_float(s: &str) -> OrNull<f64> {
-        s.parse().ok().into()
+    fn parse_float(s: AnyAsString) -> OrNull<f64> {
+        s.get().parse().ok().into()
     }
 
     #[boa_fn]
