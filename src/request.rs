@@ -362,7 +362,7 @@ impl EndpointBuilder {
                 .map_ok(move |(v, returns)| {
                     StreamItem::Declare(name.clone(), v, returns, Instant::now())
                 })
-                .map_err(|_| todo!() /*Into::into*/);
+                .map_err(Into::into);
             streams.push((false, Box::new(stream)));
         }
         let stats_tx = ctx.stats_tx.clone();
