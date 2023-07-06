@@ -2,7 +2,10 @@
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::time::Duration;
+use std::{
+    str::FromStr,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 pub(crate) mod encode;
 
@@ -71,4 +74,46 @@ pub(crate) fn get_hits_per(s: &str) -> Option<(f64, Per)> {
             _ => unreachable!("regex should only catch 'h' or 'm'"),
         },
     ))
+}
+
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum Epoch {
+    Seconds,
+    Milliseconds,
+    Microseconds,
+    Nanoseconds,
+}
+
+impl Epoch {
+    pub(crate) fn get(self) -> u128 {
+        // https://github.com/rustwasm/wasm-pack/issues/724#issuecomment-776892489
+        // SystemTime is not supported by wasm-pack. So for wasm-pack builds, we'll use js_sys::Date
+        let since_the_epoch = if cfg!(target_arch = "wasm32") {
+            Duration::from_millis(js_sys::Date::now() as u64)
+        } else {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_secs(0))
+        };
+        match self {
+            Epoch::Seconds => u128::from(since_the_epoch.as_secs()),
+            Epoch::Milliseconds => since_the_epoch.as_millis(),
+            Epoch::Microseconds => since_the_epoch.as_micros(),
+            Epoch::Nanoseconds => since_the_epoch.as_nanos(),
+        }
+    }
+}
+
+impl FromStr for Epoch {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "s" => Ok(Self::Seconds),
+            "ms" => Ok(Self::Milliseconds),
+            "mu" => Ok(Self::Microseconds),
+            "ns" => Ok(Self::Nanoseconds),
+            _ => Err(()),
+        }
+    }
 }
