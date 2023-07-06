@@ -4,6 +4,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::time::Duration;
 
+pub(crate) mod encode;
+
 /// Returns a [`Duration`] based on the input [`str`], based on the config format, or `None` if the
 /// string does not match the pattern.
 ///
