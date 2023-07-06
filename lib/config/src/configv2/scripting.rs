@@ -206,6 +206,23 @@ mod tests {
             ctx.eval(r#"end_pad("foo", 4, "")"#),
             Ok(JsValue::String("foo".into()))
         );
+
+        assert_eq!(
+            ctx.eval(r#"start_pad("foo", 6, "bar")"#),
+            Ok(JsValue::String("barfoo".into()))
+        );
+        assert_eq!(
+            ctx.eval(r#"start_pad("foo", 7, "bar")"#),
+            Ok(JsValue::String("barbfoo".into()))
+        );
+        assert_eq!(
+            ctx.eval(r#"start_pad("foo", 1, "fsdajlkvshduva")"#),
+            Ok(JsValue::String("foo".into()))
+        );
+        assert_eq!(
+            ctx.eval(r#"start_pad("foo", 4, "")"#),
+            Ok(JsValue::String("foo".into()))
+        );
     }
 }
 
@@ -267,6 +284,22 @@ mod builtins {
             None => min,
         };
         vec![(); len]
+    }
+
+    #[boa_fn]
+    fn start_pad(s: AnyAsString, min_length: i64, pad_string: &str) -> String {
+        use unicode_segmentation::UnicodeSegmentation;
+        let s = s.get();
+        let needed_chars = (min_length as usize).saturating_sub(s.len());
+
+        let mut pad_chars: String = pad_string
+            .graphemes(true)
+            .cycle()
+            .take(needed_chars)
+            .collect();
+
+        pad_chars.push_str(&s);
+        pad_chars
     }
 
     mod helper {
