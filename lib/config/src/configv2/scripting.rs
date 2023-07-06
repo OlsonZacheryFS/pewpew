@@ -13,7 +13,7 @@ use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
 use std::{
     borrow::Cow,
-    cell::{OnceCell, RefCell},
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     error::Error as StdError,
 };
@@ -50,7 +50,6 @@ impl EvalExpr {
         T: TemplateType<ProvAllowed = True, EnvsAllowed = False>,
     {
         let mut needed = Vec::new();
-        let uses_p = OnceCell::new();
         let script = format!(
             "function ____eval(____provider_values){{ return {}; }}",
             script
@@ -59,7 +58,6 @@ impl EvalExpr {
                     Segment::Raw(s) => s,
                     Segment::Prov(p, ..) => {
                         let s = format!("____provider_values.{p}");
-                        let _ = uses_p.set(true);
                         needed.push(p);
                         s
                     }
@@ -68,12 +66,6 @@ impl EvalExpr {
                 })
                 .collect::<String>()
         );
-        if !uses_p.into_inner().unwrap_or(false) {
-            // TODO: warn that a script with no provider reads was used with logging.
-            eprintln!(
-                "this script doesn't read from any providers; consider a literal or vars template"
-            );
-        }
         Ok(Self {
             ctx: DiplomaticBag::<Result<_, CreateExprError>>::new(move |_| {
                 let mut ctx = builtins::get_default_context();
