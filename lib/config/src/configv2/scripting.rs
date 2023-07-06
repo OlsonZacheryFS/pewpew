@@ -289,6 +289,24 @@ mod tests {
             serde_json::json!([[0, "x"], [1, "y"], [2, "z"]])
         );
         assert_eq!(ctx.eval("entries(null)"), Ok(JsValue::Null));
+
+        // not testing value ranges, just int * int -> int
+        assert!(matches!(
+            ctx.eval(r#"random(1, 4)"#),
+            Ok(JsValue::Integer(_))
+        ));
+        assert!(matches!(
+            ctx.eval(r#"random(1.1, 4)"#),
+            Ok(JsValue::Rational(_))
+        ));
+        assert!(matches!(
+            ctx.eval(r#"random(1, 4.1)"#),
+            Ok(JsValue::Rational(_))
+        ));
+        assert!(matches!(
+            ctx.eval(r#"random(1.001, 4.09)"#),
+            Ok(JsValue::Rational(_))
+        ));
     }
 }
 
@@ -312,7 +330,8 @@ mod builtins {
     //! IMPORTANT: Do **NOT** let these functions panic if at all possible
 
     use crate::shared::{encode::Encoding, Epoch};
-    use helper::{AnyAsString, OrNull};
+    use helper::{AnyAsString, NumType, OrNull};
+    use rand::{thread_rng, Rng};
     use scripting_macros::boa_fn;
     // use std::str::FromStr;
 
@@ -377,8 +396,18 @@ mod builtins {
     }
 
     #[boa_fn]
+    fn random(min: NumType, max: NumType) -> NumType {
+        match (min, max) {
+            (NumType::Int(i), NumType::Int(j)) => NumType::Int(thread_rng().gen_range(i..j)),
+            (i, j) => {
+                let (i, j) = (i.as_float(), j.as_float());
+                NumType::Real(thread_rng().gen_range(i..j))
+            }
+        }
+    }
+
+    #[boa_fn]
     pub fn repeat(min: i64, max: Option<i64>) -> Vec<()> {
-        use rand::{thread_rng, Rng};
         let min = min as usize;
         let len = match max {
             Some(max) => thread_rng().gen_range(min..=(max as usize)),
@@ -472,6 +501,30 @@ mod builtins {
             }
         }
 
+        pub(super) enum NumType {
+            Int(i64),
+            Real(f64),
+        }
+
+        impl NumType {
+            pub fn as_float(self) -> f64 {
+                match self {
+                    Self::Int(i) => i as f64,
+                    Self::Real(f) => f,
+                }
+            }
+        }
+
+        impl JsInput<'_> for NumType {
+            fn from_js(js: &JsValue, ctx: &mut Context) -> JsResult<Self> {
+                match js {
+                    JsValue::Integer(i) => Ok(Self::Int(*i as i64)),
+                    JsValue::Rational(f) => Ok(Self::Real(*f)),
+                    _ => Err(ctx.construct_type_error("needed numerical")),
+                }
+            }
+        }
+
         pub(super) trait AsJsResult {
             fn as_js_result(self, _: &mut Context) -> JsResult<JsValue>;
         }
@@ -544,6 +597,15 @@ mod builtins {
         impl AsJsResult for () {
             fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
                 Ok(JsValue::Null)
+            }
+        }
+
+        impl AsJsResult for NumType {
+            fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
+                Ok(match self {
+                    Self::Int(i) => JsValue::Integer(i as i32),
+                    Self::Real(f) => JsValue::Rational(f),
+                })
             }
         }
     }
