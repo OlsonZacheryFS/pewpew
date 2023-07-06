@@ -329,6 +329,19 @@ mod tests {
             Ok(JsValue::Rational(_))
         ));
     }
+
+    #[test]
+    fn range_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
+        assert_eq!(
+            ctx.eval("range(1, 10)").unwrap().to_json(&mut ctx).unwrap(),
+            serde_json::json!([1, 2, 3, 4, 5, 6, 7, 8, 9])
+        );
+        assert_eq!(
+            ctx.eval("range(10, 1)").unwrap().to_json(&mut ctx).unwrap(),
+            serde_json::json!([10, 9, 8, 7, 6, 5, 4, 3, 2])
+        );
+    }
 }
 
 pub use builtins::get_default_context;
@@ -354,6 +367,7 @@ mod builtins {
     use helper::{AnyAsString, NumType, OrNull};
     use rand::{thread_rng, Rng};
     use scripting_macros::boa_fn;
+    use std::cmp::Ordering;
     // use std::str::FromStr;
 
     #[boa_fn]
@@ -424,6 +438,15 @@ mod builtins {
                 let (i, j) = (i.as_float(), j.as_float());
                 NumType::Real(thread_rng().gen_range(i..j))
             }
+        }
+    }
+
+    #[boa_fn]
+    fn range(start: i64, end: i64) -> Vec<i64> {
+        match start.cmp(&end) {
+            Ordering::Equal => vec![],
+            Ordering::Less => (start..end).collect(),
+            Ordering::Greater => ((end + 1)..=start).rev().collect(),
         }
     }
 
