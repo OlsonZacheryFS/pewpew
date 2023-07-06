@@ -223,6 +223,11 @@ mod tests {
             ctx.eval(r#"start_pad("foo", 4, "")"#),
             Ok(JsValue::String("foo".into()))
         );
+
+        assert_eq!(
+            ctx.eval(r#"encode("foo=bar", "percent-userinfo")"#),
+            Ok(JsValue::String("foo%3Dbar".into()))
+        );
     }
 }
 
@@ -245,9 +250,15 @@ mod builtins {
     //!
     //! IMPORTANT: Do **NOT** let these functions panic if at all possible
 
+    use crate::shared::encode::Encoding;
     use helper::{AnyAsString, OrNull};
     use scripting_macros::boa_fn;
     // use std::str::FromStr;
+
+    #[boa_fn]
+    fn encode(s: AnyAsString, e: Encoding) -> String {
+        e.encode_str(&s.get())
+    }
 
     #[boa_fn]
     fn end_pad(s: AnyAsString, min_length: i64, pad_string: &str) -> String {
@@ -303,6 +314,7 @@ mod builtins {
     }
 
     mod helper {
+        use crate::shared::encode::Encoding;
         use boa_engine::{object::JsArray, Context, JsResult, JsValue};
         use std::fmt::Display;
 
@@ -331,6 +343,14 @@ mod builtins {
                     JsValue::Integer(i) => Ok(*i as i64),
                     _ => Err(ctx.construct_type_error("not an int")),
                 }
+            }
+        }
+
+        impl JsInput<'_> for Encoding {
+            fn from_js(js: &JsValue, ctx: &mut Context) -> JsResult<Self> {
+                let s: &str = JsInput::from_js(js, ctx)?;
+                s.parse()
+                    .map_err(|_| ctx.construct_type_error("invalid string for Encoding"))
             }
         }
 
