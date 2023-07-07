@@ -359,6 +359,25 @@ mod tests {
             Ok(JsValue::String("a: 1\nb: 2".into()))
         );
     }
+
+    #[test]
+    fn match_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
+        let caps = ctx.eval(
+            r#"match("<html>\n<body>\nHello, Jean! Today's date is 2038-01-19. So glad you made it!\n</body>\n</html>", "Hello, (?P<name>\\w+).*(?P<y>\\d{4})-(?P<m>\\d{2})-(?P<d>\\d{2})")"#
+        ).map_err(|js| js.display().to_string()).unwrap();
+        let caps = caps.to_json(&mut ctx).unwrap();
+        assert_eq!(
+            caps,
+            serde_json::json!({
+                "0": "Hello, Jean! Today's date is 2038-01-19",
+                "name": "Jean",
+                "y": "2038",
+                "m": "01",
+                "d": "19"
+            })
+        );
+    }
 }
 
 pub use builtins::get_default_context;
@@ -383,11 +402,10 @@ mod builtins {
     use crate::shared::{encode::Encoding, Epoch};
     use helper::{AnyAsString, NumType, OrNull};
     use rand::{thread_rng, Rng};
+    use regex::Regex;
     use scripting_macros::boa_fn;
     use serde_json::Value as SJV;
-    use std::borrow::Cow;
-    use std::cmp::Ordering;
-    // use std::str::FromStr;
+    use std::{borrow::Cow, cmp::Ordering, collections::BTreeMap, sync::Mutex};
 
     #[boa_fn]
     fn encode(s: AnyAsString, e: Encoding) -> String {
@@ -452,6 +470,47 @@ mod builtins {
             (SJV::String(s), _) => s,
             (other, _) => other.to_string(),
         }
+    }
+
+    #[boa_fn(jsname = "match")]
+    fn r#match(s: AnyAsString, regex: &str) -> SJV {
+        // Prevent same Regex fomr being compiled again.
+        static REG_CACHE: Mutex<BTreeMap<String, Result<Regex, regex::Error>>> =
+            Mutex::new(BTreeMap::new());
+        let s = s.get();
+        let mut c_lock = REG_CACHE.lock().unwrap();
+        let reg = c_lock
+            .entry(regex.to_owned())
+            .or_insert_with(|| Regex::new(regex));
+        let reg = match reg {
+            Ok(reg) => reg,
+            Err(e) => {
+                log::error!("string {regex:?} is not a valid Regex ({e})");
+                return SJV::Null;
+            }
+        };
+        let caps = match dbg!(reg.captures(&s)) {
+            Some(c) => c,
+            None => return SJV::Null,
+        };
+        SJV::Object(
+            reg.capture_names()
+                .enumerate()
+                .map(|(i, n)| {
+                    // get all capture groups, numbered or named
+                    n.map_or_else(
+                        || (i.to_string(), caps.get(i)),
+                        |n| (n.to_string(), caps.name(n)),
+                    )
+                })
+                .map(|(i, m)| {
+                    (
+                        i,
+                        m.map_or(SJV::Null, |m| SJV::String(m.as_str().to_owned())),
+                    )
+                })
+                .collect(),
+        )
     }
 
     #[boa_fn(jsname = "parseInt")]
