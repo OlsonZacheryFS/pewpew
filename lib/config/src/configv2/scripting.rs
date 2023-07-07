@@ -378,6 +378,18 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn json_path_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
+        let val = ctx
+            .eval(r#"json_path({"a": [{"c": 1}, {"c": 2}], "b": null}, "$.a.*.c")"#)
+            .map_err(|js| js.display().to_string())
+            .unwrap()
+            .to_json(&mut ctx)
+            .unwrap();
+        assert_eq!(val, serde_json::json!([1, 2]));
+    }
 }
 
 pub use builtins::get_default_context;
@@ -470,6 +482,30 @@ mod builtins {
             (SJV::String(s), _) => s,
             (other, _) => other.to_string(),
         }
+    }
+
+    #[boa_fn]
+    fn json_path(v: SJV, s: &str) -> Vec<SJV> {
+        use jsonpath_lib::Node;
+        static PATH_CACHE: Mutex<BTreeMap<String, Result<Node, String>>> =
+            Mutex::new(BTreeMap::new());
+        let mut p_lock = PATH_CACHE.lock().unwrap();
+        let path = p_lock
+            .entry(s.to_owned())
+            .or_insert_with(|| jsonpath_lib::Parser::compile(s));
+        let path = match path {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("invalid json path {s:?} ({e})");
+                return vec![];
+            }
+        };
+        jsonpath_lib::Selector::new()
+            .compiled_path(path)
+            .value(&v)
+            .select()
+            .map(|v| v.into_iter().cloned().collect())
+            .unwrap_or(vec![])
     }
 
     #[boa_fn(jsname = "match")]
