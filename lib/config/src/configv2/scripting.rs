@@ -346,6 +346,19 @@ mod tests {
             serde_json::json!({"bar": "baz", "zed": ["abc", 123, "baro"]})
         )
     }
+
+    #[test]
+    fn join_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
+        assert_eq!(
+            ctx.eval(r#"join(["foo", "bar", "baz"], "-")"#),
+            Ok(JsValue::String("foo-bar-baz".into()))
+        );
+        assert_eq!(
+            ctx.eval(r#"join({"a": 1, "b": 2}, "\n", ": ")"#),
+            Ok(JsValue::String("a: 1\nb: 2".into()))
+        );
+    }
 }
 
 pub use builtins::get_default_context;
@@ -372,6 +385,7 @@ mod builtins {
     use rand::{thread_rng, Rng};
     use scripting_macros::boa_fn;
     use serde_json::Value as SJV;
+    use std::borrow::Cow;
     use std::cmp::Ordering;
     // use std::str::FromStr;
 
@@ -415,6 +429,29 @@ mod builtins {
     #[boa_fn]
     fn epoch(e: Epoch) -> String {
         e.get().to_string()
+    }
+
+    #[boa_fn]
+    fn join(value: SJV, separator: &str, separator2: Option<&str>) -> String {
+        // The std ToString impl for SJV put extra "" around the String
+        fn get_as_str(v: &SJV) -> Cow<str> {
+            match v {
+                SJV::String(s) => Cow::Borrowed(&*s),
+                other => Cow::Owned(other.to_string()),
+            }
+        }
+        let s = separator;
+        let s2 = separator2;
+        match (value, s2) {
+            (SJV::Array(a), _) => a.iter().map(get_as_str).collect::<Vec<_>>().join(s),
+            (SJV::Object(m), Some(s2)) => m
+                .into_iter()
+                .map(|(k, v)| format!("{k}{s2}{0}", get_as_str(&v)))
+                .collect::<Vec<_>>()
+                .join(s),
+            (SJV::String(s), _) => s,
+            (other, _) => other.to_string(),
+        }
     }
 
     #[boa_fn(jsname = "parseInt")]
