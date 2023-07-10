@@ -1,4 +1,5 @@
-#![allow(dead_code)]
+mod declare;
+pub use declare::Declare;
 
 use super::{
     common::{Duration, Headers, ProviderSend},
@@ -21,7 +22,7 @@ use thiserror::Error;
 #[derive(Debug, Deserialize)]
 pub struct Endpoint<VD: Bool = True> {
     #[serde(default = "BTreeMap::new")]
-    pub declare: BTreeMap<String, Template<String, Regular, VD>>,
+    pub declare: BTreeMap<String, Declare<VD>>,
     #[serde(default = "Headers::new")]
     pub headers: Headers<VD>,
     pub body: Option<EndPointBody<VD>>,

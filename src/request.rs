@@ -357,7 +357,7 @@ impl EndpointBuilder {
                 name, vce
             );
             let stream = vce
-                .into_stream(&ctx.providers /*, false*/)
+                .into_stream(Arc::clone(&ctx.providers))
                 .expect("TODO")
                 .map_ok(move |(v, returns)| {
                     StreamItem::Declare(name.clone(), v, returns, Instant::now())

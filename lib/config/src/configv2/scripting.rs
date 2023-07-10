@@ -128,15 +128,21 @@ impl EvalExpr {
         ))
     }
 
-    pub fn into_stream<P, Ar, E>(
+    pub(crate) fn into_stream_with<F, Ar, E>(
         self,
-        providers: &BTreeMap<String, P>,
+        mut provider_get: F,
     ) -> Result<
         impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static,
         IntoStreamError,
     >
     where
-        P: ProviderStream<Ar, Err = E> + Sized + 'static,
+        F: FnMut(
+            &str,
+        ) -> Option<
+            Box<
+                dyn Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + Unpin + 'static,
+            >,
+        >,
         Ar: Clone + Send + Unpin + 'static,
         E: Send + Unpin + StdError + 'static + From<EvalExprError>,
     {
@@ -144,9 +150,8 @@ impl EvalExpr {
         let providers = needed
             .into_iter()
             .map(|pn| {
-                providers
-                    .get(&pn)
-                    .map(|p| (pn.clone(), p.as_stream()))
+                provider_get(&pn)
+                    .map(|p| (pn.clone(), p))
                     .ok_or_else(|| IntoStreamError::MissingProvider(pn.clone()))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;

@@ -198,9 +198,9 @@ where
 }
 
 impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
-    pub fn into_stream<P, Ar, E>(
+    pub(crate) fn into_stream<P, Ar, E>(
         self,
-        providers: &BTreeMap<String, P>,
+        providers: Arc<BTreeMap<String, P>>,
     ) -> Result<
         impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static,
         IntoStreamError,
@@ -209,6 +209,30 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
         P: super::scripting::ProviderStream<Ar, Err = E> + 'static,
         Ar: Clone + Send + Unpin + 'static,
         E: StdError + Send + Clone + Unpin + 'static + From<EvalExprError>,
+    {
+        self.into_stream_with(move |p| providers.get(p).map(|p| p.as_stream()))
+    }
+
+    pub(crate) fn into_stream_with<F, Ar, E>(
+        self,
+        mut provider_get: F,
+    ) -> Result<
+        impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static,
+        IntoStreamError,
+    >
+    where
+        F: FnMut(
+                &str,
+            ) -> Option<
+                Box<
+                    dyn Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>
+                        + Send
+                        + Unpin
+                        + 'static,
+                >,
+            > + Clone,
+        Ar: Clone + Send + Unpin + 'static,
+        E: Clone + Send + Unpin + StdError + 'static + From<EvalExprError>,
     {
         use futures::stream::repeat;
         Ok(match self {
@@ -224,11 +248,12 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
                             serde_json::Value::String(s),
                             vec![],
                         ))))),
-                        ExprSegment::ProvDirect(p) => providers
-                            .get(&p)
-                            .map(|p| Either3::B(p.as_stream()))
+                        ExprSegment::ProvDirect(p) => provider_get(&p)
+                            .map(|p| Either3::B(p))
                             .ok_or(IntoStreamError::MissingProvider(p)),
-                        ExprSegment::Eval(x) => x.into_stream(providers).map(Either3::C),
+                        ExprSegment::Eval(x) => {
+                            x.into_stream_with(provider_get.clone()).map(Either3::C)
+                        }
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 Either::B(zip_all::zip_all(streams).map_ok(|js| {
