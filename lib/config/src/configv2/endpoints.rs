@@ -98,6 +98,18 @@ impl Endpoint<True> {
             self.load_pattern.get_or_insert_with(|| lp.clone());
         }
     }
+
+    pub(crate) fn insert_special_tags(&mut self, id: usize) {
+        let tags = &mut self.tags;
+        tags.insert("_id".into(), Template::new_literal(id.to_string()));
+        tags.insert(
+            "method".into(),
+            Template::new_literal(self.method.to_string()),
+        );
+        let url = &self.url;
+        tags.entry("url".into())
+            .or_insert_with(|| Template::new_literal(url.evaluate_with_star()));
+    }
 }
 
 impl Endpoint<False> {

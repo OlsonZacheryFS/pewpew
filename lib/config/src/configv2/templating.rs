@@ -522,7 +522,7 @@ impl<T: TemplateType<VarsAllowed = True, EnvsAllowed = False>> PropagateVars
             .map(|p| match p {
                 Segment::Var(v, True) => super::get_var_at_path(vars, &v)
                     .ok_or_else(|| super::VarsError::VarNotFound(v))
-                    .map(|v| Segment::Raw(v.to_string())),
+                    .map(|v| Segment::Raw(v.to_string().trim_matches('"').to_owned())),
                 Segment::Env(_, no) => no.no(),
                 Segment::Expr(v, True) => {
                     let mut has_prov = false;

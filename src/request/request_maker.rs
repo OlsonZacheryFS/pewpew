@@ -346,7 +346,7 @@ impl RequestMaker {
                         if let (true, Ok(iter)) =
                             (o.tx.is_logger(), query.query(Arc::clone(&template_values)))
                         {
-                            let iter = iter.map(|v| v.map_err(|_| todo!() /*Into::into*/));
+                            let iter = iter.map(|v| v.map_err(Box::new).map_err(Into::into));
                             let tx = o.tx.clone();
                             futures.push(BlockSender::new(iter, tx).into_future());
                         }

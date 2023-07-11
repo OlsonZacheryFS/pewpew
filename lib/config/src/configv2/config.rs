@@ -10,6 +10,7 @@ use serde::Deserialize;
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct Config<VD: Bool = True> {
     pub client: Client<VD>,
+    #[serde(default = "Default::default")]
     pub general: General<VD>,
 }
 
@@ -61,6 +62,17 @@ pub struct General<VD: Bool> {
     #[serde(default = "default_log_provider_stats")]
     pub log_provider_stats: bool,
     watch_transition_time: Option<Template<Duration, VarsOnly, VD>>,
+}
+
+impl<B: Bool> Default for General<B> {
+    fn default() -> Self {
+        Self {
+            auto_buffer_start_size: default_buffer_start_size(),
+            bucket_size: default_bucket_size(),
+            log_provider_stats: default_log_provider_stats(),
+            watch_transition_time: None,
+        }
+    }
 }
 
 impl PropagateVars for General<False> {

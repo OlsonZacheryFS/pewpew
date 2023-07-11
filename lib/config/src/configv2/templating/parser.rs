@@ -265,7 +265,7 @@ mod ast {
         bytes::complete::tag,
         character::complete::{anychar, none_of},
         combinator::{all_consuming, recognize, value},
-        error::Error as NomError,
+        error::{Error as NomError, ParseError},
         multi::{many0, many1},
         sequence::{delimited, separated_pair},
         Finish, IResult, Parser,
@@ -292,18 +292,16 @@ mod ast {
     }
 
     impl<'a> Raw<'a> {
-        fn escaped(input: &str) -> IResult<&str, Self> {
+        fn escaped<E: ParseError<&'a str>>(input: &'a str) -> IResult<&str, Self, E> {
             value(Self::EscapedDollarSign, tag("$$"))(input)
         }
 
-        fn literal(input: &'a str) -> IResult<&str, Self> {
-            recognize(many1(none_of("$}")))
-                .map(Self::Literal)
-                .parse(input)
+        fn literal<E: ParseError<&'a str>>(inner: bool) -> impl Parser<&'a str, Raw<'a>, E> {
+            recognize(many1(none_of(if inner { "$}" } else { "$" }))).map(Self::Literal)
         }
 
-        fn parse(input: &'a str) -> IResult<&str, Self> {
-            alt((Self::escaped, Self::literal))(input)
+        fn parse(inner: bool) -> impl Parser<&'a str, Raw<'a>, NomError<&'a str>> {
+            alt((Self::escaped, Self::literal(inner)))
         }
     }
 
@@ -314,15 +312,15 @@ mod ast {
     }
 
     impl<'a> Segment<'a> {
-        fn parse(input: &'a str) -> IResult<&str, Self> {
+        fn parse(inner: bool) -> impl Parser<&'a str, Segment<'a>, NomError<&'a str>> {
             alt((
-                many1(Raw::parse).map(Self::Literal),
+                many1(Raw::parse(inner)).map(Self::Literal),
                 TemplateSegment::parse.map(Self::Template),
-            ))(input)
+            ))
         }
 
         pub fn parse_all(input: &'a str) -> Result<Vec<Segment>, NomError<&str>> {
-            all_consuming(many0(Self::parse))(input.trim())
+            all_consuming(many0(Self::parse(false)))(input.trim())
                 .finish()
                 .map(|(_, v)| v)
         }
@@ -338,7 +336,7 @@ mod ast {
         fn parse(input: &'a str) -> IResult<&str, Self> {
             delimited(
                 tag("${"),
-                separated_pair(anychar, tag(":"), many1(Segment::parse))
+                separated_pair(anychar, tag(":"), many1(Segment::parse(true)))
                     .map(|(tag, inner)| Self { tag, inner }),
                 tag("}"),
             )(input)
@@ -348,20 +346,20 @@ mod ast {
     #[cfg(test)]
     mod tests {
         use super::{Raw, Segment, TemplateSegment};
-        use nom::Finish;
+        use nom::{Finish, Parser};
 
         #[test]
         fn raws() {
             let input = "foo";
-            let (rem, raw) = Raw::parse(input).unwrap();
+            let (rem, raw) = Raw::parse(false).parse(input).unwrap();
             assert_eq!(rem, "");
             assert_eq!(raw, Raw::Literal("foo"));
             let input = "$$";
-            let (rem, raw) = Raw::parse(input).unwrap();
+            let (rem, raw) = Raw::parse(false).parse(input).unwrap();
             assert_eq!(rem, "");
             assert_eq!(raw, Raw::EscapedDollarSign);
             let input = "foo-${v:bar}";
-            let (rem, raw) = Raw::parse(input).unwrap();
+            let (rem, raw) = Raw::parse(false).parse(input).unwrap();
             assert_eq!(rem, "${v:bar}");
             assert_eq!(raw, Raw::Literal("foo-"));
         }

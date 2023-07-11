@@ -141,8 +141,10 @@ impl LoadTest<True, True> {
         let mut lt = pre_vars.insert_vars(&vars)?;
         let lp = &lt.load_pattern;
         let ep = &mut lt.endpoints;
-        ep.iter_mut()
-            .for_each(|e| e.insert_load_pattern(lp.as_ref()));
+        ep.iter_mut().enumerate().for_each(|(i, e)| {
+            e.insert_load_pattern(lp.as_ref());
+            e.insert_special_tags(i)
+        });
 
         Ok(lt)
     }
