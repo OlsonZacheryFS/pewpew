@@ -170,11 +170,12 @@ body:
 <pre>
 declare:
   <i>name</i>: <i>expression</i>
+  <i>name</i>: <i>collects</i>
 </pre>
 
-A *declare_subsection* provides the ability to select multiple values from a single provider.
-Without using a *declare_subsection*, multiple references to a provider will only select a
-single value. For example, in:
+A *declare_subsection* provides the ability to preprocess provider data, as well as select
+multiple values from a single provider. Without using a *declare_subsection*, multiple references
+to a provider will only select a single value. For example, in:
 
 ```yaml
 endpoints:
@@ -185,33 +186,62 @@ endpoints:
 
 both references to the provider `shipId` will resolve to the same value, which in many cases is desired.
 
-The *declare_subsection* is in the format of key/value pairs where the value is an expression.
-Every key can function as a provider and can be interpolated just as a provider would be.
+The *declare_subsection* is in the format of key/value pairs where the value is in one of two forms.
 
-> TODO: double check `endpoint.declare`. Currently, the values are simply String R-Templates
+- A single [R-Template](./common-types/templates.md#template-types). this can be used to process a
+  value once, then use that same value multiple times in the endpoint call.
+- A `collects` subsection. Can be used to take multiple values from providers.
+
+<pre>
+collects:
+  <i>name</i>:
+    take: <i>take</i>
+    as: <i>name</i>
+then: <i>template</i>
+</pre>
+
+`collects` contains a map, where the keys are [provider](./providers-section.md) names, and the
+value has the following properties:
+
+- `take`: define how many values to take from this provider. Can either be a single number, or a
+  pair of two numbers defining a random range.
+- `as`: set a name for this collection. This name can be used to interpolate the collection
+  in the `then` entry
+
+`then` is an [R-Template](./common-types/templates.md#template-types) that can use the `as`
+values defined in the `collects` as providers.
+
+Every key can function as a provider and can be interpolated just as a provider would be.
 
 ### Example 1
 ```yaml
 endpoints:
   - declare:
-      shipIds: collect(shipId, 3, 5)
+      shidIds:
+        collects:
+          shidId:
+            take: [3, 5]
+            as: _ids
+        then: ${p:_ids}
     method: DELETE
     url: https://localhost/ships
     body: '{"shipIds":${p:shipIds}}'
 ```
-Calls the endpoint `DELETE /ships` where the body is interpolated with an array of ship ids. `shipIds` will have a length between three and five.
+Calls the endpoint `DELETE /ships` where the body is interpolated with an array of ship ids. `shipIds`
+will have a length between three and five.
 
 ### Example 2
 
 ```yaml
 endpoints:
   - declare:
-      destroyedShipId: shipId
+      destroyedShipId: ${p:shipId}
     method: PUT
     url: https://localhost/ship/${p:shipId}/destroys/${p:destroyedShipId}
 ```
 Calls `PUT` on an endpoint where `shipId` and `destroyedShipId` are interpolated to different values.
 
+> R-Templates in the `declare` section will be treated as JSON values, if the resulting string is valid JSON
 
 ## provides subsection
 <pre>

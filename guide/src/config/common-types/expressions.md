@@ -26,32 +26,6 @@ sent into a provider. In addition to standard JS operations, some helper functio
 <tbody>
 <tr>
 <td>
-
-<code>collect(<i>item</i>, <i>n</i>)</code>
-
-or
-
-<code>collect(<i>item</i>, <i>min</i>, <i>max</i>)</code>
-</code>
-</td>
-<td>
-
-> Not currently implemented.
-> 
-> Due to offloading the work to a JS runtime, it is less practical to
-> detect if the function is in a `declare` or not. More likely, collect will be reintroduced
-> as part of the config format.
-
-When used in a [endpoints.declare subsection](../endpoints-section.md#declare-subsection) `collect` provides the special ability to "collect" multiple values from a provider into an array. `collect` can be called with two or three arguments. The two argument form creates an array of size *n*. The three argument form creates an array with a randomly selected size between *min* (inclusive) and *max* (exclusive).
-
-When used outside a [declare subsection](../endpoints-section.md#declare-subsection), `collect` will simply return the *item*.
-
-See the [endpoints.declare subsection](../endpoints-section.md#declare-subsection) for an example.
-
-</td>
-</tr>
-<tr>
-<td>
 <code>encode(<i>value</i>, <i>encoding</i>)</code>
 </td>
 <td>
