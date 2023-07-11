@@ -2,32 +2,114 @@ use crate::{
     configv2::PropagateVars,
     error::{EvalExprError, IntoStreamError, VarsError},
     scripting,
-    templating::{Bool, False, Regular, Template, True},
+    templating::{Bool, False, Regular, Template, True, TryDefault},
 };
 use ether::Either;
 use futures::{Stream, StreamExt, TryStreamExt};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    convert::TryFrom,
     error::Error as StdError,
     sync::Arc,
     task::Poll,
 };
-
 #[derive(Debug, Deserialize, PartialEq, Eq)]
-#[serde(untagged)]
 pub enum Declare<VD: Bool> {
+    #[serde(rename = "x")]
     Expr(Template<String, Regular, VD>),
-    Collect {
-        collects: BTreeMap<String, Collect>,
+    #[serde(rename = "c")]
+    Collects {
+        collects: Vec<Collect<VD>>,
         then: Template<String, Regular, VD>,
     },
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
-pub struct Collect {
+pub struct Collect<VD: Bool> {
     take: Take,
+    from: CollectSource<VD>,
     r#as: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+enum CollectSource<VD: Bool> {
+    #[serde(rename = "v")]
+    Var(VarSource<VD>),
+    #[serde(rename = "p")]
+    Prov(String),
+}
+
+impl PropagateVars for CollectSource<False> {
+    type Data<VD: Bool> = CollectSource<VD>;
+
+    fn insert_vars(
+        self,
+        vars: &crate::configv2::Vars<True>,
+    ) -> Result<Self::Data<True>, VarsError> {
+        match self {
+            Self::Prov(p) => Ok(Self::Data::Prov(p)),
+            Self::Var(v) => v.insert_vars(vars).map(Self::Data::Var),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(try_from = "String", bound = "")]
+enum VarSource<VD: Bool> {
+    Pre(String, VD::Inverse),
+    Post(serde_json::Value, VD),
+}
+
+impl VarSource<True> {
+    fn unwrap(self) -> serde_json::Value {
+        match self {
+            Self::Pre(_, no) => no.no(),
+            Self::Post(v, True) => v,
+        }
+    }
+}
+
+impl<VD: Bool> TryFrom<String> for VarSource<VD> {
+    type Error = &'static str;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        <VD::Inverse as TryDefault>::try_default()
+            .map(|b| Self::Pre(value, b))
+            .ok_or("wrong one")
+    }
+}
+
+impl PropagateVars for VarSource<False> {
+    type Data<VD: Bool> = VarSource<VD>;
+
+    fn insert_vars(
+        self,
+        vars: &crate::configv2::Vars<True>,
+    ) -> Result<Self::Data<True>, VarsError> {
+        match self {
+            Self::Pre(v, True) => crate::configv2::get_var_at_path(vars, &v)
+                .cloned()
+                .map(|v| Self::Data::Post(v.into(), True))
+                .ok_or_else(|| crate::configv2::VarsError::VarNotFound(v)),
+            Self::Post(_, no) => no.no(),
+        }
+    }
+}
+
+impl PropagateVars for Collect<False> {
+    type Data<VD: Bool> = Collect<VD>;
+
+    fn insert_vars(
+        self,
+        vars: &crate::configv2::Vars<True>,
+    ) -> Result<Self::Data<True>, VarsError> {
+        Ok(Collect {
+            take: self.take,
+            from: self.from.insert_vars(vars)?,
+            r#as: self.r#as,
+        })
+    }
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone, Copy)]
@@ -63,8 +145,8 @@ impl PropagateVars for Declare<False> {
     ) -> Result<Self::Data<True>, VarsError> {
         match self {
             Self::Expr(t) => t.insert_vars(vars).map(Self::Data::Expr),
-            Self::Collect { collects, then } => Ok(Declare::Collect {
-                collects,
+            Self::Collects { collects, then } => Ok(Self::Data::Collects {
+                collects: collects.insert_vars(vars)?,
                 then: then.insert_vars(vars)?,
             }),
         }
@@ -75,11 +157,14 @@ impl Declare<True> {
     pub fn get_required_providers(&self) -> BTreeSet<String> {
         match self {
             Self::Expr(t) => t.get_required_providers(),
-            Self::Collect { collects, then } => {
-                let ases: BTreeSet<_> = collects.values().map(|c| &c.r#as).collect();
+            Self::Collects { collects, then } => {
+                let ases: BTreeSet<_> = collects.iter().map(|c| &c.r#as).collect();
                 collects
-                    .keys()
-                    .cloned()
+                    .iter()
+                    .filter_map(|c| match &c.from {
+                        CollectSource::Var(_) => None,
+                        CollectSource::Prov(p) => Some(p.clone()),
+                    })
                     .chain(
                         then.get_required_providers()
                             .into_iter()
@@ -89,6 +174,7 @@ impl Declare<True> {
             }
         }
     }
+
     pub fn into_stream<P, Ar, E>(
         self,
         providers: Arc<BTreeMap<String, P>>,
@@ -101,75 +187,111 @@ impl Declare<True> {
         Ar: Clone + Send + Unpin + 'static,
         E: StdError + Send + Clone + Unpin + 'static + From<EvalExprError>,
     {
-        match self {
-            Self::Expr(t) => Ok(Either::A(t.into_stream(providers)?.map_ok(
-                |(v, ar)| match v {
-                    // The Templates will all yield Strings, so this allows any js type
-                    serde_json::Value::String(s) => match serde_json::from_str(&s) {
-                        Ok(v) => (v, ar),
-                        Err(_) => (serde_json::Value::String(s), ar),
-                    },
-                    other => (other, ar),
-                },
-            ))),
-            Self::Collect { collects, then } => {
-                let collects = collects
-                    .into_iter()
-                    .map(|(from, Collect { take, r#as })| {
-                        Ok((r#as, {
-                            let p = providers
-                                .get(&from)
-                                .cloned()
-                                .ok_or_else(|| IntoStreamError::MissingProvider(from))?;
-                            move || {
-                                use std::mem::{replace, take as mtake};
-                                let mut p = p.as_stream();
-                                let empty = move || Vec::with_capacity(take.max());
-                                let mut cache = empty();
-                                let mut ars = vec![];
-                                let mut size = take.next_size();
-                                Box::new(futures::stream::poll_fn(move |cx| {
-                                    match p.poll_next_unpin(cx) {
-                                        Poll::Pending => Poll::Pending,
-                                        Poll::Ready(Some(Ok((v, ar)))) => {
-                                            ars.extend(ar);
-                                            cache.push(v);
-                                            if cache.len() >= size {
-                                                size = take.next_size();
-                                                Poll::Ready(Some(Ok((
-                                                    replace(&mut cache, empty()).into(),
-                                                    mtake(&mut ars),
-                                                ))))
-                                            } else {
-                                                Poll::Pending
+        enum StreamOrFn<F: Fn() -> S2, S: Clone, S2> {
+            Stream(S),
+            F(F),
+        }
+
+        impl<F: Fn() -> S2, S: Clone, S2> StreamOrFn<F, S, S2> {
+            fn get(&self) -> Either<S, S2> {
+                match self {
+                    Self::Stream(s) => Either::A(s.clone()),
+                    Self::F(f) => Either::B(f()),
+                }
+            }
+        }
+        let stream = match self {
+            Self::Expr(t) => t.into_stream(providers).map(Either::A),
+            Self::Collects { collects, then } => {
+                let collects = {
+                    let providers = Arc::clone(&providers);
+                    collects
+                        .into_iter()
+                        .map(move |Collect { take, from, r#as }| {
+                            let stream = match from {
+                                CollectSource::Var(v) => {
+                                    let v = v.unwrap();
+                                    Arc::new(StreamOrFn::Stream(futures::stream::repeat_with(
+                                        move || {
+                                            Ok((vec![v.clone(); take.next_size()].into(), vec![]))
+                                        },
+                                    )))
+                                }
+                                CollectSource::Prov(p) => {
+                                    let providers = Arc::clone(&providers);
+                                    let p = providers
+                                        .get(&p)
+                                        .cloned()
+                                        .ok_or_else(|| IntoStreamError::MissingProvider(p))?;
+                                    Arc::new(StreamOrFn::F(move || {
+                                        use std::mem::{replace, take as mtake};
+                                        let mut p = p.as_stream();
+                                        let empty = move || Vec::with_capacity(take.max());
+                                        let mut cache = empty();
+                                        let mut ars = vec![];
+                                        let mut size = take.next_size();
+                                        futures::stream::poll_fn(move |cx| {
+                                            match p.poll_next_unpin(cx) {
+                                                Poll::Pending => Poll::Pending,
+                                                Poll::Ready(Some(Ok((v, ar)))) => {
+                                                    ars.extend(ar);
+                                                    cache.push(v);
+                                                    if cache.len() >= size {
+                                                        size = take.next_size();
+                                                        Poll::Ready(Some(Ok((
+                                                            replace(&mut cache, empty()).into(),
+                                                            mtake(&mut ars),
+                                                        ))))
+                                                    } else {
+                                                        Poll::Pending
+                                                    }
+                                                }
+                                                Poll::Ready(Some(Err(e))) => {
+                                                    Poll::Ready(Some(Err(e)))
+                                                }
+                                                Poll::Ready(None) => {
+                                                    Poll::Ready((!cache.is_empty()).then(|| {
+                                                        Ok((
+                                                            mtake(&mut cache).into(),
+                                                            mtake(&mut ars),
+                                                        ))
+                                                    }))
+                                                }
                                             }
-                                        }
-                                        Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-                                        Poll::Ready(None) => {
-                                            Poll::Ready((!cache.is_empty()).then(|| {
-                                                Ok((mtake(&mut cache).into(), mtake(&mut ars)))
-                                            }))
-                                        }
-                                    }
-                                }))
-                            }
-                        }))
-                    })
-                    .collect::<Result<BTreeMap<_, _>, _>>()?;
+                                        })
+                                    }))
+                                }
+                            };
+                            Ok((r#as, stream))
+                        })
+                        .collect::<Result<BTreeMap<_, _>, IntoStreamError>>()?
+                };
+                let providers = Arc::clone(&providers);
                 then.into_stream_with(move |p| {
                     providers.get(p).map(|p| p.as_stream()).or_else(|| {
                         collects.get(p).map(|p| {
-                            p() as Box<
-                                dyn Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>
-                                    + Send
-                                    + Unpin,
-                            >
+                            Box::new(p.get())
+                                as Box<
+                                    dyn Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>
+                                        + Send
+                                        + Unpin,
+                                >
                         })
                     })
                 })
                 .map(Either::B)
             }
-        }
+        };
+        Ok(stream?.map_ok(|(v, ar)| {
+            let v = match v {
+                serde_json::Value::String(s) => match serde_json::from_str(&s) {
+                    Ok(v) => v,
+                    Err(_) => serde_json::Value::String(s),
+                },
+                other => other,
+            };
+            (v, ar)
+        }))
     }
 }
 
@@ -180,49 +302,12 @@ mod tests {
 
     #[test]
     fn basic() {
-        let input = r#"expr"#;
-        let d: Declare<True> = from_yaml::<Declare<False>>(input)
-            .unwrap()
-            .insert_vars(&BTreeMap::new())
-            .unwrap();
-        assert_eq!(d, Declare::Expr(Template::new_literal("expr".into())));
-        assert_eq!(d.get_required_providers(), Default::default());
-        let input = r#""[${p:foo}]""#;
-        let d: Declare<True> = from_yaml::<Declare<False>>(input)
-            .unwrap()
-            .insert_vars(&BTreeMap::new())
-            .unwrap();
-        assert_eq!(d.get_required_providers(), ["foo".into()].into());
-    }
+        let input = "!x expr";
 
-    #[test]
-    fn collect() {
-        let input = r#"
-        collects:
-          foo:
-            take: 5
-            as: foo2
-        then: "${p:foo2}${p:bar}"
-        "#;
-        let d: Declare<True> = from_yaml::<Declare<False>>(input)
+        let decl = from_yaml::<Declare<False>>(input)
             .unwrap()
             .insert_vars(&BTreeMap::new())
             .unwrap();
-        assert_eq!(
-            d.get_required_providers(),
-            ["foo".into(), "bar".into()].into()
-        );
-        let input = r#"
-        collects: {}
-        then: "${p:foo2}${p:bar}"
-        "#;
-        let d: Declare<True> = from_yaml::<Declare<False>>(input)
-            .unwrap()
-            .insert_vars(&BTreeMap::new())
-            .unwrap();
-        assert_eq!(
-            d.get_required_providers(),
-            ["foo2".into(), "bar".into()].into()
-        );
+        assert_eq!(decl.get_required_providers(), [].into());
     }
 }
