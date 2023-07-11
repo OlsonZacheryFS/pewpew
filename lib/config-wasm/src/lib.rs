@@ -86,7 +86,7 @@ impl Config {
     // return the bucket size for the test
     #[wasm_bindgen(js_name = getBucketSize)]
     pub fn get_bucket_size(&self) -> u64 {
-        self.0.config.general.bucket_size.as_secs()
+        self.0.config.general.bucket_size.get().as_secs()
     }
 
     // return a string array of files used to feed providers
