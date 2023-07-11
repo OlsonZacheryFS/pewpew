@@ -71,12 +71,7 @@ impl Display for VarValue<True> {
             Self::Bool(b) => Display::fmt(b, f),
             Self::Str(t) => write!(f, "\"{}\"", t.get().escape_default()),
             Self::List(l) => {
-                write!(f, "[")?;
-                for v in l {
-                    Display::fmt(v, f)?;
-                    write!(f, ",")?;
-                }
-                write!(f, "]")
+                write!(f, "[{}]", l.into_iter().map(ToString::to_string).join(","))
             }
             Self::Map(m) => {
                 write!(f, "{{")?;
