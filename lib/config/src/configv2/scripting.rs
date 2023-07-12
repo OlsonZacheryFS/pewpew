@@ -495,7 +495,7 @@ mod builtins {
         // The std ToString impl for SJV put extra "" around the String
         fn get_as_str(v: &SJV) -> Cow<str> {
             match v {
-                SJV::String(s) => Cow::Borrowed(&*s),
+                SJV::String(s) => Cow::Borrowed(s),
                 other => Cow::Owned(other.to_string()),
             }
         }
@@ -666,6 +666,8 @@ mod builtins {
     }
 
     mod helper {
+        #![allow(clippy::wrong_self_convention)]
+
         use crate::shared::{encode::Encoding, Epoch};
         use boa_engine::{object::JsArray, Context, JsResult, JsValue};
         use std::fmt::Display;

@@ -67,22 +67,22 @@ impl Encoding {
         match self {
             Encoding::Base64 => STANDARD_NO_PAD.encode(s),
             Encoding::PercentSimple => {
-                percent_encoding::utf8_percent_encode(&s, percent_encoding::CONTROLS).to_string()
+                percent_encoding::utf8_percent_encode(s, percent_encoding::CONTROLS).to_string()
             }
             Encoding::PercentQuery => {
-                percent_encoding::utf8_percent_encode(&s, QUERY_ENCODE_SET).to_string()
+                percent_encoding::utf8_percent_encode(s, QUERY_ENCODE_SET).to_string()
             }
             Encoding::Percent => {
-                percent_encoding::utf8_percent_encode(&s, DEFAULT_ENCODE_SET).to_string()
+                percent_encoding::utf8_percent_encode(s, DEFAULT_ENCODE_SET).to_string()
             }
             Encoding::PercentPath => {
-                percent_encoding::utf8_percent_encode(&s, PATH_SEGMENT_ENCODE_SET).to_string()
+                percent_encoding::utf8_percent_encode(s, PATH_SEGMENT_ENCODE_SET).to_string()
             }
             Encoding::PercentUserinfo => {
-                percent_encoding::utf8_percent_encode(&s, USERINFO_ENCODE_SET).to_string()
+                percent_encoding::utf8_percent_encode(s, USERINFO_ENCODE_SET).to_string()
             }
             Encoding::NonAlphanumeric => {
-                percent_encoding::utf8_percent_encode(&s, percent_encoding::NON_ALPHANUMERIC)
+                percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC)
                     .to_string()
             }
         }

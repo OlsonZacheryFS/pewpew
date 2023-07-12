@@ -24,7 +24,7 @@ pub fn duration_from_string(dur: &str) -> Option<Duration> {
         .then(|| {
             static RE: Lazy<Regex> =
                 Lazy::new(|| Regex::new(BASE_RE).expect("should be a valid regex"));
-            RE.captures_iter(&dur)
+            RE.captures_iter(dur)
                 .map(|captures| {
                     // shouldn't panic due to how regex is set up
                     // unless a value greater then u64::MAX is used

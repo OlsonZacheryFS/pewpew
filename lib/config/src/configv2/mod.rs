@@ -73,7 +73,7 @@ impl Display for VarValue<True> {
             Self::Bool(b) => Display::fmt(b, f),
             Self::Str(t) => write!(f, "\"{}\"", t.get().escape_default()),
             Self::List(l) => {
-                write!(f, "[{}]", l.into_iter().map(ToString::to_string).join(","))
+                write!(f, "[{}]", l.iter().map(ToString::to_string).join(","))
             }
             Self::Map(m) => {
                 write!(f, "{{")?;
@@ -103,7 +103,7 @@ fn get_var_at_path<'a>(vars: &'a Vars<True>, path: &str) -> Option<&'a VarValue<
     let this = path.pop_front()?;
     let var = vars.get(this)?;
 
-    var.get(&path.make_contiguous())
+    var.get(path.make_contiguous())
 }
 
 fn insert_env_vars(
@@ -141,7 +141,7 @@ impl LoadTest<True, True> {
         env_vars: &BTreeMap<String, String>,
     ) -> Result<Self, LoadTestGenError> {
         let mut pre_vars =
-            serde_yaml::from_str::<LoadTest<False, False>>(yaml)?.insert_env_vars(&env_vars)?;
+            serde_yaml::from_str::<LoadTest<False, False>>(yaml)?.insert_env_vars(env_vars)?;
         pre_vars
             .endpoints
             .iter_mut()
@@ -208,7 +208,7 @@ impl LoadTest<True, True> {
             .map(|(i, _)| i)
             .collect_vec();
 
-        (!missing_peak.is_empty()).then(|| MissingPeakLoad(missing_peak))
+        (!missing_peak.is_empty()).then_some(MissingPeakLoad(missing_peak))
     }
 
     pub fn ok_for_loadtest(&self) -> Result<(), InvalidForLoadTest> {

@@ -57,6 +57,7 @@ pub enum Template<
         #[derivative(Debug = "ignore")]
         __dontuse: (T::EnvsAllowed, ED::Inverse),
     },
+    #[allow(clippy::type_complexity)]
     PreVars {
         template: TemplatedString<T>,
         /// Determines "next" state after vars propagation, depending on if initial variant needed
@@ -97,7 +98,7 @@ where
     type Error = TemplateGenError<V>;
 
     fn try_from(value: TemplatedString<T>) -> Result<Self, Self::Error> {
-        match value.as_literal() {
+        match value.into_literal() {
             Ok(s) => match s.parse::<V>() {
                 Ok(v) => Ok(Self::Literal { value: v }),
                 Err(e) => Err(TemplateGenError::FromStr(e)),
@@ -117,7 +118,7 @@ where
                                 let s = s.collapse();
                                 match s.clone().try_collect() {
                                     None => Ok(Template::NeedsProviders {
-                                        script: s.as_regular().unwrap().into_script()?,
+                                        script: s.into_regular().unwrap().into_script()?,
                                         __dontuse: TryDefault::try_default().unwrap(),
                                     }),
                                     Some(s) => s
@@ -207,7 +208,7 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
                             vec![],
                         ))))),
                         ExprSegment::ProvDirect(p) => provider_get(&p)
-                            .map(|p| Either3::B(p))
+                            .map(Either3::B)
                             .ok_or(IntoStreamError::MissingProvider(p)),
                         ExprSegment::Eval(x) => {
                             x.into_stream_with(provider_get.clone()).map(Either3::C)
@@ -400,7 +401,7 @@ impl<T: TemplateType> TemplatedString<T> {
             .collect()
     }
 
-    fn as_literal(mut self) -> Result<String, Self> {
+    fn into_literal(mut self) -> Result<String, Self> {
         let one = self.0.pop();
         match (one, self.0.len()) {
             (Some(Segment::Raw(s)), 0) => Ok(s),
@@ -416,7 +417,7 @@ impl<T: TemplateType> TemplatedString<T> {
         self.0.iter()
     }
 
-    fn as_regular(self) -> Option<TemplatedString<Regular>> {
+    fn into_regular(self) -> Option<TemplatedString<Regular>> {
         fn map_segment<T: TemplateType, I: Bool>(s: Segment<T, I>) -> Option<Segment<Regular, I>> {
             Some(match s {
                 Segment::Raw(s) => Segment::Raw(s),

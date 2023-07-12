@@ -98,7 +98,7 @@ impl<T: TemplateType, IN: Bool> Segment<T, IN> {
         Self::allowed_flag(tag).and_then(|a| Self::outer_flag(tag).map(|o| (a, o)))
     }
 
-    fn prim_gen<'a, F, D, F2>(
+    fn prim_gen<F, D, F2>(
         f: F,
         tag: char,
         seg: Vec<ASeg>,
