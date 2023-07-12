@@ -297,6 +297,8 @@ impl Declare<True> {
 
 #[cfg(test)]
 mod tests {
+    use crate::templating::ExprSegment;
+
     use super::*;
     use serde_yaml::from_str as from_yaml;
 
@@ -309,5 +311,76 @@ mod tests {
             .insert_vars(&BTreeMap::new())
             .unwrap();
         assert_eq!(decl.get_required_providers(), [].into());
+        assert_eq!(decl, Declare::Expr(Template::new_literal("expr".into())));
+    }
+
+    #[test]
+    fn collects() {
+        let input = r#"!c
+        collects:
+          - take: 3
+            from: !p a
+            as: _a
+        then: ${p:_a}"#;
+        let decl = from_yaml::<Declare<False>>(input)
+            .unwrap()
+            .insert_vars(&BTreeMap::new())
+            .unwrap();
+        assert_eq!(decl.get_required_providers(), ["a".into()].into());
+        assert_eq!(
+            decl,
+            Declare::Collects {
+                collects: vec![Collect {
+                    take: Take::Fixed(3),
+                    from: CollectSource::Prov("a".into()),
+                    r#as: "_a".into()
+                }],
+                then: Template::NeedsProviders {
+                    script: vec![ExprSegment::ProvDirect("_a".into())],
+                    __dontuse: TryDefault::try_default().unwrap()
+                }
+            }
+        );
+        let input = r#"!c
+        collects:
+          - take: 3
+            from: !p a
+            as: _a
+          - take: [4, 7]
+            from: !p b
+            as: _b
+        then: ${p:_a}${p:_b}"#;
+        let decl = from_yaml::<Declare<False>>(input)
+            .unwrap()
+            .insert_vars(&BTreeMap::new())
+            .unwrap();
+        assert_eq!(
+            decl.get_required_providers(),
+            ["a".into(), "b".into()].into()
+        );
+        assert_eq!(
+            decl,
+            Declare::Collects {
+                collects: vec![
+                    Collect {
+                        take: Take::Fixed(3),
+                        from: CollectSource::Prov("a".into()),
+                        r#as: "_a".into()
+                    },
+                    Collect {
+                        take: Take::Rand(4, 7),
+                        from: CollectSource::Prov("b".into()),
+                        r#as: "_b".into()
+                    }
+                ],
+                then: Template::NeedsProviders {
+                    script: vec![
+                        ExprSegment::ProvDirect("_a".into()),
+                        ExprSegment::ProvDirect("_b".into())
+                    ],
+                    __dontuse: TryDefault::try_default().unwrap()
+                }
+            }
+        );
     }
 }

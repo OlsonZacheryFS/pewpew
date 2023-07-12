@@ -72,20 +72,12 @@ pub enum Template<
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExprSegment {
     Str(String),
     ProvDirect(String),
     Eval(EvalExpr),
 }
-
-impl PartialEq for ExprSegment {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other)
-    }
-}
-
-impl Eq for ExprSegment {}
 
 #[derive(Debug, Error)]
 pub enum TemplateGenError<V: FromStr>

@@ -167,12 +167,12 @@ body:
 ## declare subsection
 <pre>
 declare:
-  <i>name</i>: <i>expression</i>
-  <i>name</i>: <i>collects</i>
+  <i>name</i>: !x <i>expression</i>
+  <i>name</i>: !c <i>collects</i>
 </pre>
 
-A *declare_subsection* provides the ability to preprocess provider data, as well as select
-multiple values from a single provider. Without using a *declare_subsection*, multiple references
+A *declare_subsection* provides the ability to preprocess provider or variable data, as well as select
+multiple values from a single provider or var. Without using a *declare_subsection*, multiple references
 to a provider will only select a single value. For example, in:
 
 ```yaml
@@ -192,17 +192,17 @@ The *declare_subsection* is in the format of key/value pairs where the value is 
 
 <pre>
 collects:
-  <i>name</i>:
-    take: <i>take</i>
+  - take: <i>take</i>
+    from: !p <i>provider</i> | !v <i>var</i>
     as: <i>name</i>
 then: <i>template</i>
 </pre>
 
-`collects` contains a map, where the keys are [provider](./providers-section.md) names, and the
-value has the following properties:
+`collects` is an array of maps with the following keys:
 
 - `take`: define how many values to take from this provider. Can either be a single number, or a
   pair of two numbers defining a random range.
+- `from`: specify either a provider or a variable to read the values from
 - `as`: set a name for this collection. This name can be used to interpolate the collection
   in the `then` entry
 
@@ -217,8 +217,8 @@ endpoints:
   - declare:
       shidIds:
         collects:
-          shidId:
-            take: [3, 5]
+          - take: [3, 5]
+            from: !p shipId
             as: _ids
         then: ${p:_ids}
     method: DELETE
@@ -233,7 +233,7 @@ will have a length between three and five.
 ```yaml
 endpoints:
   - declare:
-      destroyedShipId: ${p:shipId}
+      destroyedShipId: !x ${p:shipId}
     method: PUT
     url: https://localhost/ship/${p:shipId}/destroys/${p:destroyedShipId}
 ```

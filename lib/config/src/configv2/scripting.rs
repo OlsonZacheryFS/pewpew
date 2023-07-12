@@ -38,9 +38,9 @@ pub fn eval_direct(code: &str) -> Result<String, EvalExprError> {
 }
 
 #[derive(Derivative)]
-#[derivative(Debug)]
+#[derivative(Debug, PartialEq, Eq)]
 pub struct EvalExpr {
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug = "ignore", PartialEq = "ignore")]
     ctx: DiplomaticBag<(RefCell<Context>, JsFunction)>,
     needed: Arc<[String]>,
     script: Arc<str>,
