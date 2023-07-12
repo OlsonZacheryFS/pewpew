@@ -189,6 +189,7 @@ mod tests {
     fn parse_funcs() {
         let mut ctx: Context = super::builtins::get_default_context();
         assert_eq!(ctx.eval(r#"parseInt("5")"#), Ok(JsValue::Integer(5)));
+        assert_eq!(ctx.eval(r#"parseInt("5.1")"#), Ok(JsValue::Integer(5)));
         assert_eq!(ctx.eval(r#"parseFloat("5.1")"#), Ok(JsValue::Rational(5.1)));
         assert_eq!(ctx.eval(r#"parseFloat("e")"#), Ok(JsValue::Null));
     }
@@ -579,7 +580,12 @@ mod builtins {
 
     #[boa_fn(jsname = "parseInt")]
     fn parse_int(s: AnyAsString) -> OrNull<i64> {
-        s.get().parse().ok().into()
+        let s = s.get();
+        let s = s.as_str();
+        s.parse()
+            .ok()
+            .or_else(|| s.parse::<f64>().ok().map(|x| x as i64))
+            .into()
     }
 
     #[boa_fn(jsname = "parseFloat")]
