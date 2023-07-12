@@ -38,6 +38,8 @@ pub struct LoadTest<VD: Bool = True, ED: Bool = True> {
     pub providers: BTreeMap<String, ProviderType<VD>>,
     pub loggers: BTreeMap<String, Logger<VD>>,
     pub endpoints: Vec<Endpoint<VD>>,
+    #[serde(skip)]
+    lt_err: Option<InvalidForLoadTest>,
 }
 
 type Vars<ED> = BTreeMap<String, VarValue<ED>>;
@@ -155,6 +157,8 @@ impl LoadTest<True, True> {
             e.insert_global_headers(headers);
         });
 
+        lt.lt_err = lt.make_lt_err();
+
         Ok(lt)
     }
 
@@ -171,7 +175,7 @@ impl LoadTest<True, True> {
         Ok(())
     }
 
-    pub fn ok_for_loadtest(&self) -> Result<(), InvalidForLoadTest> {
+    fn make_lt_err(&self) -> Option<InvalidForLoadTest> {
         use InvalidForLoadTest::{MissingLoadPattern, MissingPeakLoad};
         let missing = self
             .endpoints
@@ -180,7 +184,7 @@ impl LoadTest<True, True> {
             .filter_map(|(i, e)| e.load_pattern.is_none().then_some(i))
             .collect::<Vec<_>>();
         if !missing.is_empty() {
-            return Err(MissingLoadPattern(missing));
+            return Some(MissingLoadPattern(missing));
         }
         let missing_peak = self
             .endpoints
@@ -188,13 +192,13 @@ impl LoadTest<True, True> {
             .enumerate()
             .filter(|(_, e)| e.peak_load.is_none())
             .filter(|(_, e)| {
-                e.get_required_providers()
-                    .into_iter()
-                    .all(|p| match self.providers.get(&p) {
+                e.get_required_providers().into_iter().all(|p| {
+                    match dbg!(&self.providers).get(&p) {
                         None => true,
                         Some(ProviderType::Response(_)) => false,
                         Some(_) => true,
-                    })
+                    }
+                })
             })
             .filter(|(_, e)| {
                 e.provides
@@ -204,10 +208,13 @@ impl LoadTest<True, True> {
             .map(|(i, _)| i)
             .collect_vec();
 
-        if missing_peak.is_empty() {
-            Ok(())
-        } else {
-            Err(MissingPeakLoad(missing_peak))
+        (!missing_peak.is_empty()).then(|| MissingPeakLoad(missing_peak))
+    }
+
+    pub fn ok_for_loadtest(&self) -> Result<(), InvalidForLoadTest> {
+        match self.lt_err.as_ref() {
+            Some(e) => Err(e.clone()),
+            None => Ok(()),
         }
     }
 
@@ -236,6 +243,7 @@ impl LoadTest<False, False> {
             providers,
             loggers,
             endpoints,
+            ..
         } = self;
         Ok(LoadTest {
             config,
@@ -244,6 +252,7 @@ impl LoadTest<False, False> {
             providers,
             loggers,
             endpoints,
+            lt_err: None,
         })
     }
 }
@@ -269,6 +278,7 @@ impl PropagateVars for LoadTest<False, True> {
             providers,
             loggers,
             endpoints,
+            ..
         } = self;
 
         Ok(LoadTest {
@@ -278,6 +288,7 @@ impl PropagateVars for LoadTest<False, True> {
             providers: providers.insert_vars(vars)?,
             loggers: loggers.insert_vars(vars)?,
             endpoints: endpoints.insert_vars(vars)?,
+            lt_err: None,
         })
     }
 }

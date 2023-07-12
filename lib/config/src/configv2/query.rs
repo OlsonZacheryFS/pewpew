@@ -211,6 +211,7 @@ enum Select<T = Gc<CodeBlock>> {
     Expr(T),
     Map(BTreeMap<String, Self>),
     List(Vec<Self>),
+    Int(i64),
 }
 
 impl SelectTmp {
@@ -227,6 +228,7 @@ impl SelectTmp {
                 .map(|v| v.compile(ctx))
                 .collect::<Option<Vec<_>>>()
                 .map(Select::List),
+            Self::Int(i) => Some(Select::Int(i)),
         }
     }
 }
@@ -252,6 +254,7 @@ impl Select {
                 .map(|v| v.select(ctx))
                 .collect::<JsResult<Vec<JsValue>>>()
                 .map(|arr| JsArray::from_iter(arr, ctx).into()),
+            Self::Int(i) => Ok(JsValue::Integer(*i as i32)),
         }
     }
 }
