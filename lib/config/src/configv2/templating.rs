@@ -242,7 +242,7 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
                     ExprSegment::Str(s) => Ok(s.to_string()),
                     ExprSegment::ProvDirect(p) => data
                         .as_object()
-                        .and_then(|o| o.get::<str>(&p))
+                        .and_then(|o| o.get::<str>(p))
                         .map(ToString::to_string)
                         .ok_or_else(|| EvalExprError(format!("provider data {p} not found"))),
                 })
@@ -258,7 +258,7 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
             Self::NeedsProviders { script, __dontuse } => script
                 .iter()
                 .map(|x| match x {
-                    ExprSegment::Str(s) => &*s,
+                    ExprSegment::Str(s) => s,
                     ExprSegment::Eval(_) | ExprSegment::ProvDirect(_) => "*",
                 })
                 .collect(),

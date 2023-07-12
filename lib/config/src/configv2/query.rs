@@ -250,7 +250,7 @@ impl Select {
                 Ok(obj.build().into())
             }
             Self::List(l) => l
-                .into_iter()
+                .iter()
                 .map(|v| v.select(ctx))
                 .collect::<JsResult<Vec<JsValue>>>()
                 .map(|arr| JsArray::from_iter(arr, ctx).into()),

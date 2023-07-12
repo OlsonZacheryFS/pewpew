@@ -162,7 +162,7 @@ impl EvalExpr {
     {
         let Self { ctx, needed, .. } = self;
         let providers = needed
-            .into_iter()
+            .iter()
             .map(|pn| {
                 provider_get(pn)
                     .map(|p| (pn.clone(), p))
