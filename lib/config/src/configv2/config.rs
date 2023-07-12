@@ -31,7 +31,7 @@ pub struct Client<VD: Bool> {
     #[serde(default = "default_timeout")]
     pub request_timeout: Template<Duration, VarsOnly, VD>,
     #[serde(default = "Headers::new")]
-    headers: Headers<VD>,
+    pub(crate) headers: Headers<VD>,
     #[serde(default = "default_keepalive")]
     pub keepalive: Template<Duration, VarsOnly, VD>,
 }

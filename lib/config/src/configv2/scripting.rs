@@ -16,6 +16,7 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     error::Error as StdError,
+    sync::Arc,
 };
 use zip_all::zip_all_map;
 
@@ -41,16 +42,44 @@ pub fn eval_direct(code: &str) -> Result<String, EvalExprError> {
 pub struct EvalExpr {
     #[derivative(Debug = "ignore")]
     ctx: DiplomaticBag<(RefCell<Context>, JsFunction)>,
-    needed: Vec<String>,
+    needed: Arc<[String]>,
+    script: Arc<str>,
+}
+
+impl Clone for EvalExpr {
+    fn clone(&self) -> Self {
+        Self::from_parts(Arc::clone(&self.script), Arc::clone(&self.needed))
+            .expect("was already made")
+    }
 }
 
 impl EvalExpr {
+    fn from_parts(script: Arc<str>, needed: Arc<[String]>) -> Result<Self, CreateExprError> {
+        Ok(Self {
+            ctx: DiplomaticBag::<Result<_, CreateExprError>>::new(|_| {
+                let mut ctx = builtins::get_default_context();
+                ctx.eval(script.as_bytes())
+                    .map_err(CreateExprError::fn_err)?;
+                let efn = ctx
+                    .eval("____eval")
+                    .ok()
+                    .and_then(|v| v.as_object().cloned())
+                    .and_then(JsFunction::from_object)
+                    .expect("just created eval fn; should be fine");
+                Ok((RefCell::new(ctx), efn))
+            })
+            .transpose()
+            .map_err(DiplomaticBag::into_inner)?,
+            needed,
+            script,
+        })
+    }
     pub fn from_template<T>(script: Vec<Segment<T, True>>) -> Result<Self, CreateExprError>
     where
         T: TemplateType<ProvAllowed = True, EnvsAllowed = False>,
     {
         let mut needed = Vec::new();
-        let script = format!(
+        let script = Arc::from(format!(
             "function ____eval(____provider_values){{ return {}; }}",
             script
                 .into_iter()
@@ -65,23 +94,8 @@ impl EvalExpr {
                     _ => unreachable!("should have inserted vars first"),
                 })
                 .collect::<String>()
-        );
-        Ok(Self {
-            ctx: DiplomaticBag::<Result<_, CreateExprError>>::new(move |_| {
-                let mut ctx = builtins::get_default_context();
-                ctx.eval(script).map_err(CreateExprError::fn_err)?;
-                let efn = ctx
-                    .eval("____eval")
-                    .ok()
-                    .and_then(|v| v.as_object().cloned())
-                    .and_then(JsFunction::from_object)
-                    .expect("just created eval fn; should be fine");
-                Ok((RefCell::new(ctx), efn))
-            })
-            .transpose()
-            .map_err(DiplomaticBag::into_inner)?,
-            needed,
-        })
+        ));
+        Self::from_parts(script, Arc::from(needed))
     }
 
     pub fn required_providers(&self) -> BTreeSet<&str> {
@@ -146,7 +160,7 @@ impl EvalExpr {
         Ar: Clone + Send + Unpin + 'static,
         E: Send + Unpin + StdError + 'static + From<EvalExprError>,
     {
-        let Self { ctx, needed } = self;
+        let Self { ctx, needed, .. } = self;
         let providers = needed
             .into_iter()
             .map(|pn| {

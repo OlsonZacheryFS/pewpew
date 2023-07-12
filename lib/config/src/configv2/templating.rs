@@ -37,7 +37,7 @@ mod parser;
 
 pub use parser::Segment;
 
-#[derive(Deserialize, PartialEq, Eq, Derivative)]
+#[derive(Deserialize, PartialEq, Eq, Derivative, Clone)]
 #[derivative(Debug)]
 #[serde(try_from = "TemplatedString<T>")]
 #[serde(bound = "")]
@@ -72,41 +72,7 @@ pub enum Template<
     },
 }
 
-impl<V, T, VD, ED> Clone for Template<V, T, VD, ED>
-where
-    V: FromStr + Clone,
-    V::Err: StdError + Send + Sync + 'static,
-    T: TemplateType<ProvAllowed = False>,
-    VD: Bool,
-    ED: Bool,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Self::Literal { value } => Self::Literal {
-                value: value.clone(),
-            },
-            Self::Env {
-                template,
-                __dontuse,
-            } => Self::Env {
-                template: template.clone(),
-                __dontuse: *__dontuse,
-            },
-            Self::PreVars {
-                template,
-                next,
-                __dontuse,
-            } => Self::PreVars {
-                template: template.clone(),
-                next: *next,
-                __dontuse: *__dontuse,
-            },
-            Self::NeedsProviders { __dontuse, .. } => __dontuse.2.no(),
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExprSegment {
     Str(String),
     ProvDirect(String),

@@ -110,6 +110,10 @@ impl Endpoint<True> {
         tags.entry("url".into())
             .or_insert_with(|| Template::new_literal(url.evaluate_with_star()));
     }
+
+    pub(crate) fn insert_global_headers(&mut self, headers: &Headers<True>) {
+        self.headers.extend(headers.iter().cloned())
+    }
 }
 
 impl Endpoint<False> {

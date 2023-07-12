@@ -46,22 +46,28 @@ endpoints:
       Content-Type: application/json
     logs:
       l:
-        select: >-
-          (response.body.b == "foo"
-            && response.body.e == response.body.e2
-            && request.headers.test == "123"
-            && parseInt(request.headers.test) + 1 == 124
-            && parseInt(request.headers.float) == 1
-            && parseFloat(request.headers.float) == 1.23
-            && parseInt(response.body.b) == null
+        select:
+          each:
+            - 'response.body.b == "foo"'
+            - 'val_eq(response.body.e, response.body.e2)'
+            - 'request.headers.test == "123"'
+            - 'parseInt(request.headers.test) + 1 == 124'
+          all: >-
+            (response.body.b == "foo"
+              && response.body.e == response.body.e2
+              && request.headers.test == "123"
+              && parseInt(request.headers.test) + 1 == 124
+              && parseInt(request.headers.float) == 1
+              && parseFloat(request.headers.float) == 1.23
+              && parseInt(response.body.b) == null
             )
-          &&
-          (
-            (response.body.a == 0
-              && response.body.c == 123
-              && response.body.f == "line1")
-            ||
-            (response.body.a == 1
-              && response.body.c == 456
-              && response.body.f == "line2")
-          )
+            &&
+            (
+              (response.body.a == 0
+                && response.body.c == 123
+                && response.body.f == "line1")
+              ||
+              (response.body.a == 1
+                && response.body.c == 456
+                && response.body.f == "line2")
+            )

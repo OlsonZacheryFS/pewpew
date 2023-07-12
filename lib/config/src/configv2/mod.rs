@@ -148,9 +148,11 @@ impl LoadTest<True, True> {
         let mut lt = pre_vars.insert_vars(&vars)?;
         let lp = &lt.load_pattern;
         let ep = &mut lt.endpoints;
+        let headers = &lt.config.client.headers;
         ep.iter_mut().enumerate().for_each(|(i, e)| {
             e.insert_load_pattern(lp.as_ref());
-            e.insert_special_tags(i)
+            e.insert_special_tags(i);
+            e.insert_global_headers(headers);
         });
 
         Ok(lt)

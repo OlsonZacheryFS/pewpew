@@ -1,15 +1,13 @@
-use crate::templating::VarsOnly;
-
 use super::{
     templating::{Bool, False, Regular, Template, True},
     PropagateVars,
 };
-use derive_more::{Deref, From};
+use derive_more::{Deref, DerefMut, From};
 use serde::Deserialize;
 use std::{convert::TryFrom, str::FromStr, time::Duration as SDur};
 use thiserror::Error;
 
-#[derive(Debug, Deserialize, Deref, PartialEq, Eq, From)]
+#[derive(Debug, Deserialize, Deref, PartialEq, Eq, From, DerefMut)]
 pub struct Headers<VD: Bool>(
     #[serde(with = "tuple_vec_map")]
     #[serde(default = "Vec::new")]
