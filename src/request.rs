@@ -208,7 +208,7 @@ pub struct BuilderContext {
     pub client:
         Arc<Client<HttpsConnector<HttpConnector<hyper::client::connect::dns::GaiResolver>>>>,
     // a mapping of names to their prospective providers
-    pub providers: Arc<BTreeMap<String, providers::Provider>>,
+    pub providers: Arc<BTreeMap<Arc<str>, providers::Provider>>,
     // a mapping of names to their prospective loggers
     pub loggers: BTreeMap<String, providers::Logger>,
     // channel that receives and aggregates stats for the test
@@ -325,7 +325,7 @@ impl EndpointBuilder {
         }
 
         for name in providers_to_stream {
-            let provider = match ctx.providers.get(&name) {
+            let provider = match ctx.providers.get::<str>(&name) {
                 Some(p) => p,
                 None => continue,
             };
@@ -388,9 +388,9 @@ impl EndpointBuilder {
 
 pub enum StreamItem {
     Instant(Option<Instant>),
-    Declare(String, json::Value, Vec<AutoReturn>, Instant),
+    Declare(Arc<str>, json::Value, Vec<AutoReturn>, Instant),
     None,
-    TemplateValue(String, json::Value, Option<AutoReturn>, Instant),
+    TemplateValue(Arc<str>, json::Value, Option<AutoReturn>, Instant),
 }
 
 fn multipart_body_as_hyper_body(

@@ -7,7 +7,7 @@ use thiserror::Error;
 #[derive(Clone, Debug, Error)]
 pub enum RecoverableError {
     #[error("endpoint was delayed waiting for provider {0}")]
-    ProviderDelay(String),
+    ProviderDelay(Arc<str>),
     #[error("body error: {0}")]
     BodyErr(#[source] Arc<dyn StdError + Send + Sync>),
     #[error("connection error: {1}")]

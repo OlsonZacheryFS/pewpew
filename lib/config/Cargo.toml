@@ -28,7 +28,7 @@ phf = { version = "0.11", features = ["macros"] }
 rand = "0.8"
 regex = "1"
 scripting-macros = { path = "../scripting-macros" }
-serde = { version = "1.0.163", features = ["derive"] }
+serde = { version = "1.0.163", features = ["derive", "rc"] }
 serde_json = "1"
 serde-tuple-vec-map = "1.0.1"
 serde_yaml = "0.9.21"

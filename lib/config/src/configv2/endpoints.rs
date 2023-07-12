@@ -16,13 +16,14 @@ use std::{
     num::NonZeroUsize,
     path::PathBuf,
     str::FromStr,
+    sync::Arc,
 };
 use thiserror::Error;
 
 #[derive(Debug, Deserialize)]
 pub struct Endpoint<VD: Bool = True> {
     #[serde(default = "BTreeMap::new")]
-    pub declare: BTreeMap<String, Declare<VD>>,
+    pub declare: BTreeMap<Arc<str>, Declare<VD>>,
     #[serde(default = "Headers::new")]
     pub headers: Headers<VD>,
     pub body: Option<EndPointBody<VD>>,
@@ -35,7 +36,7 @@ pub struct Endpoint<VD: Bool = True> {
     pub tags: BTreeMap<String, Template<String, Regular, VD>>,
     pub url: Template<String, Regular, VD>,
     #[serde(default)]
-    pub provides: BTreeMap<String, EndpointProvides>,
+    pub provides: BTreeMap<Arc<str>, EndpointProvides>,
     // book says optional, check what the behavior should be and if this
     // should default
     #[serde(default)]
@@ -72,7 +73,7 @@ impl PropagateVars for Endpoint<False> {
 }
 
 impl Endpoint<True> {
-    pub fn get_required_providers(&self) -> BTreeSet<String> {
+    pub fn get_required_providers(&self) -> BTreeSet<Arc<str>> {
         self.declare
             .values()
             .flat_map(|v| v.get_required_providers().into_iter())
@@ -148,7 +149,7 @@ pub enum EndPointBody<VD: Bool = True> {
 }
 
 impl EndPointBody<True> {
-    fn get_required_providers(&self) -> BTreeSet<String> {
+    fn get_required_providers(&self) -> BTreeSet<Arc<str>> {
         match self {
             Self::String(t) => t.get_required_providers(),
             Self::File(_, t) => t.get_required_providers(),

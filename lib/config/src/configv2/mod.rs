@@ -4,6 +4,7 @@ use self::error::{EnvsError, InvalidForLoadTest, LoadTestGenError, VarsError};
 use self::templating::{Bool, EnvsOnly, False, Template, True};
 use itertools::Itertools;
 use serde::Deserialize;
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     fmt::{self, Display},
@@ -35,7 +36,7 @@ pub struct LoadTest<VD: Bool = True, ED: Bool = True> {
     #[serde(bound = "load_pattern::LoadPattern<VD>: serde::de::DeserializeOwned")]
     load_pattern: Option<load_pattern::LoadPattern<VD>>,
     vars: Vars<ED>,
-    pub providers: BTreeMap<String, ProviderType<VD>>,
+    pub providers: BTreeMap<Arc<str>, ProviderType<VD>>,
     pub loggers: BTreeMap<String, Logger<VD>>,
     pub endpoints: Vec<Endpoint<VD>>,
     #[serde(skip)]
@@ -193,7 +194,7 @@ impl LoadTest<True, True> {
             .filter(|(_, e)| e.peak_load.is_none())
             .filter(|(_, e)| {
                 e.get_required_providers().into_iter().all(|p| {
-                    match dbg!(&self.providers).get(&p) {
+                    match self.providers.get::<str>(&p) {
                         None => true,
                         Some(ProviderType::Response(_)) => false,
                         Some(_) => true,

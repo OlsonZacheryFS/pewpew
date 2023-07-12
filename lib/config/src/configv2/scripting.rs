@@ -42,7 +42,7 @@ pub fn eval_direct(code: &str) -> Result<String, EvalExprError> {
 pub struct EvalExpr {
     #[derivative(Debug = "ignore", PartialEq = "ignore")]
     ctx: DiplomaticBag<(RefCell<Context>, JsFunction)>,
-    needed: Arc<[String]>,
+    needed: Arc<[Arc<str>]>,
     script: Arc<str>,
 }
 
@@ -54,7 +54,7 @@ impl Clone for EvalExpr {
 }
 
 impl EvalExpr {
-    fn from_parts(script: Arc<str>, needed: Arc<[String]>) -> Result<Self, CreateExprError> {
+    fn from_parts(script: Arc<str>, needed: Arc<[Arc<str>]>) -> Result<Self, CreateExprError> {
         Ok(Self {
             ctx: DiplomaticBag::<Result<_, CreateExprError>>::new(|_| {
                 let mut ctx = builtins::get_default_context();
@@ -87,7 +87,7 @@ impl EvalExpr {
                     Segment::Raw(s) => s,
                     Segment::Prov(p, ..) => {
                         let s = format!("____provider_values.{p}");
-                        needed.push(p);
+                        needed.push(Arc::from(p));
                         s
                     }
                     Segment::Env(_, no) => no.no(),
@@ -98,8 +98,8 @@ impl EvalExpr {
         Self::from_parts(script, Arc::from(needed))
     }
 
-    pub fn required_providers(&self) -> BTreeSet<&str> {
-        self.needed.iter().map(|s| s.as_str()).collect()
+    pub fn required_providers(&self) -> BTreeSet<Arc<str>> {
+        self.needed.iter().cloned().collect()
     }
 
     pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, EvalExprError> {
@@ -107,7 +107,7 @@ impl EvalExpr {
             .as_object()
             .ok_or_else(|| EvalExprError("provided data was not a Map".to_owned()))?
             .into_iter()
-            .map(|(s, v)| (s.clone(), (v.clone(), vec![])))
+            .map(|(s, v)| (Arc::from(s.clone()), (v.clone(), vec![])))
             .collect();
         self.ctx.as_ref().and_then(move |_, (ctx, efn)| {
             let ctx = &mut *ctx.borrow_mut();
@@ -118,7 +118,7 @@ impl EvalExpr {
     fn eval_raw<Ar>(
         ctx: &mut Context,
         efn: &JsFunction,
-        values: BTreeMap<String, (serde_json::Value, Vec<Ar>)>,
+        values: BTreeMap<Arc<str>, (serde_json::Value, Vec<Ar>)>,
     ) -> Result<(serde_json::Value, Vec<Ar>), EvalExprErrorInner> {
         let values: BTreeMap<_, _> = values
             .into_iter()
@@ -130,7 +130,7 @@ impl EvalExpr {
             .collect::<Result<_, _>>()?;
         let mut object = ObjectInitializer::new(ctx);
         for (name, (value, _)) in values.iter() {
-            object.property(name.as_str(), value, Attribute::READONLY);
+            object.property(name.to_string(), value, Attribute::READONLY);
         }
         let object = object.build();
         Ok((
@@ -164,11 +164,11 @@ impl EvalExpr {
         let providers = needed
             .into_iter()
             .map(|pn| {
-                provider_get(&pn)
+                provider_get(pn)
                     .map(|p| (pn.clone(), p))
                     .ok_or_else(|| IntoStreamError::MissingProvider(pn.clone()))
             })
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
+            .collect::<Result<BTreeMap<Arc<str>, _>, _>>()?;
         Ok(zip_all_map(providers, true).and_then(move |values| {
             ctx.as_ref().and_then(|_, (ctx, efn)| {
                 use futures::future::{err, ok};

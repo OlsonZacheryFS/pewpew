@@ -59,14 +59,13 @@ use std::{
 };
 
 struct Endpoints {
-    // yaml index of the endpoint, (endpoint tags, builder)
     inner: Vec<(
         BTreeMap<String, String>,
         request::EndpointBuilder,
-        BTreeSet<String>,
+        BTreeSet<Arc<str>>,
     )>,
     // provider name, yaml index of endpoints which provide the provider
-    providers: BTreeMap<String, Vec<usize>>,
+    providers: BTreeMap<Arc<str>, Vec<usize>>,
 }
 
 impl Endpoints {
@@ -81,12 +80,10 @@ impl Endpoints {
         &mut self,
         endpoint_tags: BTreeMap<String, String>,
         builder: request::EndpointBuilder,
-        provides: BTreeSet<String>,
-        //required_providers: config::RequiredProviders,
-        required_providers: BTreeSet<String>,
+        provides: BTreeSet<Arc<str>>,
+        required_providers: BTreeSet<Arc<str>>,
     ) {
         let i = self.inner.len();
-        //let set = required_providers.unique_providers();
         self.inner
             .push((endpoint_tags, builder, required_providers));
         for p in provides {
@@ -99,7 +96,7 @@ impl Endpoints {
         self,
         filter_fn: F,
         builder_ctx: &request::BuilderContext,
-        response_providers: &BTreeSet<String>,
+        response_providers: &BTreeSet<Arc<str>>,
     ) -> Result<Vec<impl Future<Output = Result<(), TestError>> + Send>, TestError>
     where
         F: Fn(&BTreeMap<String, String>) -> bool,
@@ -386,7 +383,7 @@ pub enum TestEndReason {
     CtrlC,
     KilledByLogger,
     ProviderEnded,
-    ConfigUpdate(Arc<BTreeMap<String, providers::Provider>>),
+    ConfigUpdate(Arc<BTreeMap<Arc<str>, providers::Provider>>),
 }
 
 /// Inner(1)-level runtime future function.
@@ -669,8 +666,8 @@ fn create_config_watcher(
     run_config: RunConfig,
     config_file_path: PathBuf,
     stats_tx: FCUnboundedSender<StatsMessage>,
-    mut previous_config_providers: BTreeMap<String, config::ProviderType>,
-    mut previous_providers: Arc<BTreeMap<String, providers::Provider>>,
+    mut previous_config_providers: BTreeMap<Arc<str>, config::ProviderType>,
+    mut previous_providers: Arc<BTreeMap<Arc<str>, providers::Provider>>,
 ) {
     let start_time = Instant::now();
     let mut interval = IntervalStream::new(tokio::time::interval(Duration::from_millis(1000)));
@@ -1021,7 +1018,7 @@ fn create_load_test_future(
     config: LoadTest,
     run_config: RunConfig,
     test_ended_tx: broadcast::Sender<Result<TestEndReason, TestError>>,
-    providers: Arc<BTreeMap<String, providers::Provider>>,
+    providers: Arc<BTreeMap<Arc<str>, providers::Provider>>,
     stats_tx: FCUnboundedSender<StatsMessage>,
     stdout: FCSender<MsgType>,
     stderr: FCSender<MsgType>,
@@ -1125,10 +1122,11 @@ pub(crate) fn create_http_client(
     Ok(Client::builder().set_host(false).build::<_, Body>(https))
 }
 
-type ProvidersResult = Result<(BTreeMap<String, providers::Provider>, BTreeSet<String>), TestError>;
+type ProvidersResult =
+    Result<(BTreeMap<Arc<str>, providers::Provider>, BTreeSet<Arc<str>>), TestError>;
 
 fn get_providers_from_config(
-    config_providers: &BTreeMap<String, config::ProviderType>,
+    config_providers: &BTreeMap<Arc<str>, config::ProviderType>,
     auto_size: usize,
     test_ended_tx: &broadcast::Sender<Result<TestEndReason, TestError>>,
     config_path: &Path,

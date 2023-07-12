@@ -37,7 +37,7 @@ enum CollectSource<VD: Bool> {
     #[serde(rename = "v")]
     Var(VarSource<VD>),
     #[serde(rename = "p")]
-    Prov(String),
+    Prov(Arc<str>),
 }
 
 impl PropagateVars for CollectSource<False> {
@@ -154,11 +154,11 @@ impl PropagateVars for Declare<False> {
 }
 
 impl Declare<True> {
-    pub fn get_required_providers(&self) -> BTreeSet<String> {
+    pub fn get_required_providers(&self) -> BTreeSet<Arc<str>> {
         match self {
             Self::Expr(t) => t.get_required_providers(),
             Self::Collects { collects, then } => {
-                let ases: BTreeSet<_> = collects.iter().map(|c| &c.r#as).collect();
+                let ases: BTreeSet<_> = collects.iter().map(|c| c.r#as.as_str()).collect();
                 collects
                     .iter()
                     .filter_map(|c| match &c.from {
@@ -168,7 +168,7 @@ impl Declare<True> {
                     .chain(
                         then.get_required_providers()
                             .into_iter()
-                            .filter(|k| !ases.contains(k)),
+                            .filter(|k| !ases.contains::<str>(k)),
                     )
                     .collect()
             }
@@ -177,7 +177,7 @@ impl Declare<True> {
 
     pub fn into_stream<P, Ar, E>(
         self,
-        providers: Arc<BTreeMap<String, P>>,
+        providers: Arc<BTreeMap<Arc<str>, P>>,
     ) -> Result<
         impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static,
         IntoStreamError,
@@ -220,7 +220,7 @@ impl Declare<True> {
                                 CollectSource::Prov(p) => {
                                     let providers = Arc::clone(&providers);
                                     let p = providers
-                                        .get(&p)
+                                        .get::<str>(&p)
                                         .cloned()
                                         .ok_or_else(|| IntoStreamError::MissingProvider(p))?;
                                     Arc::new(StreamOrFn::F(move || {

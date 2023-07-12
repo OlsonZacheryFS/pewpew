@@ -51,7 +51,7 @@ pub(super) struct RequestMaker {
 }
 
 pub(super) struct ProviderDelays {
-    inner: Vec<String>,
+    inner: Vec<Arc<str>>,
 }
 
 impl ProviderDelays {
@@ -59,7 +59,7 @@ impl ProviderDelays {
         Self { inner: Vec::new() }
     }
 
-    fn push(&mut self, name: String) {
+    fn push(&mut self, name: Arc<str>) {
         self.inner.push(name)
     }
 
@@ -102,7 +102,7 @@ impl RequestMaker {
                         }
                         _ => (),
                     }
-                    template_values.insert(name, value);
+                    template_values.insert(name.to_string(), value);
                     auto_returns.extend(returns.into_iter().map(AutoReturn::into_future));
                 }
                 StreamItem::None => (),
@@ -113,7 +113,7 @@ impl RequestMaker {
                         }
                         _ => (),
                     }
-                    template_values.insert(name, value);
+                    template_values.insert(name.to_string(), value);
                     if let (Some(ar), false) = (auto_return, self.no_auto_returns) {
                         auto_returns.push(ar.into_future());
                     }

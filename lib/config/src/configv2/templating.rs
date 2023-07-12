@@ -75,8 +75,8 @@ pub enum Template<
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExprSegment {
-    Str(String),
-    ProvDirect(String),
+    Str(Arc<str>),
+    ProvDirect(Arc<str>),
     Eval(EvalExpr),
 }
 
@@ -159,7 +159,7 @@ where
 impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
     pub(crate) fn into_stream<P, Ar, E>(
         self,
-        providers: Arc<BTreeMap<String, P>>,
+        providers: Arc<BTreeMap<Arc<str>, P>>,
     ) -> Result<
         impl Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>> + Send + 'static,
         IntoStreamError,
@@ -204,7 +204,7 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
                     .into_iter()
                     .map(|s| match s {
                         ExprSegment::Str(s) => Ok(Either3::A(repeat(Ok((
-                            serde_json::Value::String(s),
+                            serde_json::Value::String(s.to_string()),
                             vec![],
                         ))))),
                         ExprSegment::ProvDirect(p) => provider_get(&p)
@@ -239,10 +239,10 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
                 .iter()
                 .map(|e| match e {
                     ExprSegment::Eval(x) => x.evaluate(data.clone()),
-                    ExprSegment::Str(s) => Ok(s.to_owned()),
+                    ExprSegment::Str(s) => Ok(s.to_string()),
                     ExprSegment::ProvDirect(p) => data
                         .as_object()
-                        .and_then(|o| o.get(p.as_str()))
+                        .and_then(|o| o.get::<str>(&p))
                         .map(ToString::to_string)
                         .ok_or_else(|| EvalExprError(format!("provider data {p} not found"))),
                 })
@@ -258,7 +258,7 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
             Self::NeedsProviders { script, __dontuse } => script
                 .iter()
                 .map(|x| match x {
-                    ExprSegment::Str(s) => s.as_str(),
+                    ExprSegment::Str(s) => &*s,
                     ExprSegment::Eval(_) | ExprSegment::ProvDirect(_) => "*",
                 })
                 .collect(),
@@ -274,19 +274,18 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
         }
     }
 
-    pub fn get_required_providers(&self) -> BTreeSet<String> {
+    pub fn get_required_providers(&self) -> BTreeSet<Arc<str>> {
         match self {
             Self::Literal { .. } => BTreeSet::new(),
             Self::NeedsProviders { script, .. } => script
                 .iter()
                 .flat_map(|p| match p {
                     ExprSegment::Eval(x) => x.required_providers().into_iter().collect_vec(),
-                    ExprSegment::ProvDirect(p) => vec![p.as_str()],
+                    ExprSegment::ProvDirect(p) => vec![Arc::clone(p)],
                     ExprSegment::Str(_) => vec![],
                 })
-                .collect::<BTreeSet<&str>>()
+                .collect::<BTreeSet<Arc<str>>>()
                 .into_iter()
-                .map(ToOwned::to_owned)
                 .collect(),
             Self::PreVars { __dontuse, .. } => __dontuse.1.no(),
             Self::Env { __dontuse, .. } => __dontuse.1.no(),
@@ -445,8 +444,8 @@ impl<T: TemplateType<ProvAllowed = True, EnvsAllowed = False>> TemplatedString<T
         self.into_iter()
             .map(|s| {
                 Ok(match s {
-                    Segment::Raw(x) => ExprSegment::Str(x),
-                    Segment::Prov(p, _) => ExprSegment::ProvDirect(p),
+                    Segment::Raw(x) => ExprSegment::Str(Arc::from(x)),
+                    Segment::Prov(p, _) => ExprSegment::ProvDirect(Arc::from(p)),
                     Segment::Expr(x, _) => ExprSegment::Eval(EvalExpr::from_template(x)?),
                     _ => unreachable!("need to insert vars first"),
                 })

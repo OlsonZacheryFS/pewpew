@@ -71,7 +71,7 @@ impl CreateExprError {
 #[derive(Debug, Error)]
 pub enum IntoStreamError {
     #[error("missing provider: {0}")]
-    MissingProvider(String),
+    MissingProvider(Arc<str>),
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq, PartialOrd, Ord)]

@@ -731,7 +731,7 @@ pub fn create_try_run_stats_channel(
 pub fn create_stats_channel(
     test_killer: broadcast::Sender<Result<TestEndReason, TestError>>,
     config: &config::General<True>,
-    providers: &BTreeMap<String, providers::Provider>,
+    providers: &BTreeMap<Arc<str>, providers::Provider>,
     mut console: FCSender<MsgType>,
     run_config: &RunConfig,
 ) -> Result<futures_channel::UnboundedSender<StatsMessage>, TestError> {
@@ -755,7 +755,7 @@ pub fn create_stats_channel(
     let providers: Vec<_> = if log_provider_stats {
         providers
             .iter()
-            .map(|(name, kind)| channel::ChannelStatsReader::new(name.clone(), &kind.rx))
+            .map(|(name, kind)| channel::ChannelStatsReader::new(name.to_string(), &kind.rx))
             .collect()
     } else {
         Vec::new()
@@ -812,7 +812,7 @@ pub fn create_stats_channel(
                         let providers = providers
                             .iter()
                             .map(|(name, kind)| {
-                                channel::ChannelStatsReader::new(name.clone(), &kind.rx)
+                                channel::ChannelStatsReader::new(name.to_string(), &kind.rx)
                             })
                             .collect();
                         Poll::Ready(Some(StreamItem::UpdateProviders(providers)))
