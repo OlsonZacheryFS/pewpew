@@ -14,6 +14,7 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, VecDeque},
     convert::{TryFrom, TryInto},
+    fmt,
     sync::Arc,
 };
 
@@ -63,7 +64,6 @@ impl TryFrom<QueryTmp> for Query {
     }
 }
 
-#[derive(Debug)]
 struct QueryInner {
     select: Select,
     for_each: Vec<Gc<CodeBlock>>,
@@ -71,7 +71,13 @@ struct QueryInner {
     ctx: RefCell<Context>,
 }
 
-#[derive(Debug, Deserialize, Derivative)]
+impl fmt::Debug for QueryInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<<query>>")
+    }
+}
+
+#[derive(Debug, Deserialize)]
 struct QueryTmp {
     select: SelectTmp,
     #[serde(default = "Vec::new")]
