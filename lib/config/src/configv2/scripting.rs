@@ -395,6 +395,15 @@ mod tests {
             .unwrap();
         assert_eq!(val, serde_json::json!([1, 2]));
     }
+
+    #[test]
+    fn val_eq_fn() {
+        let mut ctx: Context = super::builtins::get_default_context();
+        let val = ctx.eval("[1] == [1]").unwrap().as_boolean().unwrap();
+        assert!(!val);
+        let val = ctx.eval("val_eq([1], [1])").unwrap().as_boolean().unwrap();
+        assert!(val);
+    }
 }
 
 pub use builtins::get_default_context;
@@ -630,6 +639,12 @@ mod builtins {
         pad_chars
     }
 
+    #[boa_fn]
+    fn val_eq(a: SJV, b: SJV) -> bool {
+        // By-value comparison for js values, as Array and Object are compared by reference
+        a == b
+    }
+
     mod helper {
         use crate::shared::{encode::Encoding, Epoch};
         use boa_engine::{object::JsArray, Context, JsResult, JsValue};
@@ -748,6 +763,12 @@ mod builtins {
         impl AsJsResult for String {
             fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
                 Ok(JsValue::String(self.into()))
+            }
+        }
+
+        impl AsJsResult for bool {
+            fn as_js_result(self, _: &mut Context) -> JsResult<JsValue> {
+                Ok(JsValue::Boolean(self))
             }
         }
 

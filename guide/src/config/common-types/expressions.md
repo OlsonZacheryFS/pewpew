@@ -346,5 +346,18 @@ of this string then it will be truncated from the right. If the needed padding i
 
 </td>
 </tr>
+<tr>
+<td>
+<code>val_eq(<i>value1</i>, <i>value2</i>)</code>
+</td>
+<td>
+
+Performs by-value equality comparison of the two values.
+
+In Javascript, Array and Object types are compared by reference, so `[] == []` becomes `false`.
+This function compares by value, so `val_eq([], [])` will return `true`.
+
+</td>
+</tr>
 </tbody>
 </table>
