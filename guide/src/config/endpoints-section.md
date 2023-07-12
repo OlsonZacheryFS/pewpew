@@ -64,8 +64,6 @@ The `endpoints` section declares what HTTP endpoints will be called during a tes
 
   A new group of aggregated stats will be created for every status code returned by the endpoint.
 
-  > TODO: do these tags need to be inserted in the config, or does the library add them?
-
   All endpoints have the following implicitly defined tags:
 
   | Name | Description |
