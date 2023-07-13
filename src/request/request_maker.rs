@@ -272,6 +272,7 @@ impl RequestMaker {
             template_values.insert("request".into(), request_provider);
             request.headers_mut().extend(headers);
 
+            // This is the line where the actual request is sent.
             let mut response_future = client.request(request).map_err(|e| {
                 let err: Arc<dyn StdError + Send + Sync> = if let Some(io_error_maybe) = e.source()
                 {
