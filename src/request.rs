@@ -220,8 +220,20 @@ pub struct EndpointBuilder {
     start_stream: Option<Pin<Box<dyn Stream<Item = (Instant, Option<Instant>)> + Send>>>,
 }
 
-fn convert_to_debug<T>(value: &[(String, T)]) -> Vec<String> {
-    value.iter().map(|(key, _)| key.to_string()).collect()
+trait GetKeysDebug {
+    fn get_keys_debug(&self) -> Vec<&str>;
+}
+
+impl<S: AsRef<str>, T> GetKeysDebug for BTreeMap<S, T> {
+    fn get_keys_debug(&self) -> Vec<&str> {
+        self.keys().map(AsRef::as_ref).collect()
+    }
+}
+
+impl<S: AsRef<str>, T> GetKeysDebug for [(S, T)] {
+    fn get_keys_debug(&self) -> Vec<&str> {
+        self.iter().map(|(s, _)| s.as_ref()).collect()
+    }
 }
 
 impl EndpointBuilder {
@@ -254,12 +266,10 @@ impl EndpointBuilder {
             max_parallel_requests,
             ..
         } = self.endpoint;
-        /*
-        debug!("EndpointBuilder.build method=\"{}\" url=\"{}\" body=\"{}\" headers=\"{:?}\" no_auto_returns=\"{}\" \
+        debug!("EndpointBuilder.build method=\"{}\" url=\"{}\" body=\"{:?}\" headers=\"{:?}\" no_auto_returns=\"{}\" \
             max_parallel_requests=\"{:?}\" provides=\"{:?}\" logs=\"{:?}\" on_demand=\"{}\" request_timeout=\"{:?}\"",
-            method.as_str(), url.evaluate_with_star(), body, convert_to_debug(&headers), no_auto_returns,
-            max_parallel_requests, convert_to_debug(&provides), convert_to_debug(&logs), on_demand, request_timeout);
-        */
+            method.as_str(), url.evaluate_with_star(), body, headers.get_keys_debug(), no_auto_returns,
+            max_parallel_requests, provides.get_keys_debug(), logs.get_keys_debug(), on_demand, request_timeout);
 
         let timeout = request_timeout.unwrap_or_else(|| ctx.config.client.request_timeout.clone());
 
@@ -272,10 +282,8 @@ impl EndpointBuilder {
         let provides = provides
             .into_iter()
             .map(|(k, v)| {
-                /*
                 debug!("EndpointBuilder.build provide method=\"{}\" url=\"{}\" provide=\"{:?}\" provides=\"{:?}\"",
                     method.as_str(), url.evaluate_with_star(), k, v);
-                */
                 let provider = ctx
                     .providers
                     .get(&k)
