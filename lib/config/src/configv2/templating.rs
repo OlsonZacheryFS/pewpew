@@ -37,6 +37,11 @@ mod parser;
 
 pub use parser::Segment;
 
+/// Template type that allows for insertion of environment or static config variables, as well as
+/// repeated evaluation with values from the providers.
+///
+/// The `__dontuse` properties of certain variants are just flags to ensure that that variant
+/// cannot be constructed if certain conditions are not met
 #[derive(Deserialize, PartialEq, Eq, Derivative, Clone)]
 #[derivative(Debug)]
 #[serde(try_from = "TemplatedString<T>")]
@@ -73,10 +78,14 @@ pub enum Template<
     },
 }
 
+/// Segment of an Expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExprSegment {
+    /// Just a string.
     Str(Arc<str>),
+    /// Insert a Provider value as a String.
     ProvDirect(Arc<str>),
+    /// Execute the contained JS code, and insert the result into the final String.
     Eval(EvalExpr),
 }
 
@@ -157,6 +166,10 @@ where
 }
 
 impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
+    /// Converts the Template into a Stream the pulls values from the Providers as needed, and
+    /// evaluates the template with those values for each output.
+    ///
+    /// Used by the Declare into_stream() method.
     pub(crate) fn into_stream<P, Ar, E>(
         self,
         providers: Arc<BTreeMap<Arc<str>, P>>,
@@ -232,6 +245,8 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
         })
     }
 
+    /// Directly evaluate the template by passing in a map of provider name - provider data
+    /// key-value pairs.
     pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, EvalExprError> {
         match self {
             Self::Literal { value } => Ok(value.clone()),
@@ -252,6 +267,8 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
         }
     }
 
+    /// Place holder evaluation of the template; any segment that requires a provider value will be
+    /// filled in with "*"
     pub fn evaluate_with_star(&self) -> String {
         match self {
             Self::Literal { value } => value.clone(),
@@ -267,6 +284,7 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
         }
     }
 
+    /// Returns Some() if no provider data is required.
     pub fn as_static(&self) -> Option<&str> {
         match self {
             Self::Literal { value } => Some(value),
@@ -274,6 +292,10 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
         }
     }
 
+    /// Return a set of the names of providers that are required to successfully evaluate this
+    /// template.
+    ///
+    /// If this method return an empty set, then as_static() should return Some()
     pub fn get_required_providers(&self) -> BTreeSet<Arc<str>> {
         match self {
             Self::Literal { .. } => BTreeSet::new(),
@@ -375,6 +397,7 @@ where
     }
 }
 
+/// Raw templating data, containing segments on where data needs to be read from.
 #[derive(Debug, PartialEq, Eq, Deserialize, Clone)]
 #[serde(try_from = "&str")]
 #[serde(bound = "")]
@@ -391,6 +414,7 @@ impl<T: TemplateType> TemplatedString<T> {
             .collect()
     }
 
+    /// Turn adjacent Raw string segments into a single Raw
     fn collapse(self) -> Self {
         self.into_iter()
             .coalesce(|a, b| match (a, b) {
@@ -400,6 +424,7 @@ impl<T: TemplateType> TemplatedString<T> {
             .collect()
     }
 
+    /// Returns Ok() if the template contains a single Raw segment. Otherwise, return Err(self)
     fn into_literal(mut self) -> Result<String, Self> {
         let one = self.0.pop();
         match (one, self.0.len()) {

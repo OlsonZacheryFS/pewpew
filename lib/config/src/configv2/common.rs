@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::{convert::TryFrom, str::FromStr, time::Duration as SDur};
 use thiserror::Error;
 
+/// Used to set the HTTP headers for the request
 #[derive(Debug, Deserialize, Deref, PartialEq, Eq, From, DerefMut)]
 pub struct Headers<VD: Bool>(
     #[serde(with = "tuple_vec_map")]

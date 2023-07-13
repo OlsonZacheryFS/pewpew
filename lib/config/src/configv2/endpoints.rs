@@ -138,7 +138,6 @@ impl TryFrom<&str> for Method {
     }
 }
 
-// Error("deserializing nested enum in EndPointBody::str from YAML is not supported yet", line: 1, column: 1)
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EndPointBody<VD: Bool = True> {

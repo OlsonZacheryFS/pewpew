@@ -2,6 +2,11 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Expr, ExprLit, ExprPath, Item, ItemFn, ItemMod, Lit, Path};
 
+/// Write needed boilerplate code around the function to make the signature align with the one
+/// required by boa engine.
+///
+/// The original function is defined as initially written inside the new (same named) function, and
+/// is not externally accessible
 #[proc_macro_attribute]
 pub fn boa_fn(_attrs: TokenStream, input: TokenStream) -> TokenStream {
     let fun = parse_macro_input!(input as ItemFn);
@@ -14,6 +19,8 @@ pub fn boa_fn(_attrs: TokenStream, input: TokenStream) -> TokenStream {
             ctx: &mut ::boa_engine::Context) -> ::boa_engine::JsResult<boa_engine::JsValue> {
             use ::boa_engine::builtins::JsArgs;
             use self::helper::{AsJsResult, JsInput};
+
+            // original function
             #fun
 
 
@@ -23,6 +30,8 @@ pub fn boa_fn(_attrs: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// creates a phf map containing all of the `#[boa_fn]` functions, as well as a function that
+/// returns a new Context with all the functions inserted.
 #[proc_macro_attribute]
 pub fn boa_mod(_attrs: TokenStream, input: TokenStream) -> TokenStream {
     let modu = parse_macro_input!(input as ItemMod);

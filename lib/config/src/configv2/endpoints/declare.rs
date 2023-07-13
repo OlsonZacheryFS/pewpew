@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
     task::Poll,
 };
+
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 pub enum Declare<VD: Bool> {
     #[serde(rename = "x")]
@@ -27,15 +28,22 @@ pub enum Declare<VD: Bool> {
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 pub struct Collect<VD: Bool> {
+    /// How many values to take.
     take: Take,
+    /// Where to take values from.
     from: CollectSource<VD>,
+    /// Name to refer to the resulting array as.
     r#as: String,
 }
 
+/// Specifies where values for a Collect are taken from.
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 enum CollectSource<VD: Bool> {
+    /// Take a var at the path.
+    /// The same var value is cloned for as many times as needed.
     #[serde(rename = "v")]
     Var(VarSource<VD>),
+    /// Pull multiple values from the specified provider.
     #[serde(rename = "p")]
     Prov(Arc<str>),
 }
@@ -112,6 +120,7 @@ impl PropagateVars for Collect<False> {
     }
 }
 
+/// Data for how many values should be taken from underlying source each yield.
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone, Copy)]
 #[serde(untagged)]
 enum Take {
@@ -128,6 +137,8 @@ impl Take {
         }
     }
 
+    /// Maximum size that this Take represents.
+    /// Used to ensure single allocation of Vec
     fn max(&self) -> usize {
         match self {
             Self::Fixed(x) => *x,
@@ -187,6 +198,9 @@ impl Declare<True> {
         Ar: Clone + Send + Unpin + 'static,
         E: StdError + Send + Clone + Unpin + 'static + From<EvalExprError>,
     {
+        /// Kind of hacky workaround because PollFn is not Clone.
+        ///
+        /// Contains either a clonable stream, or a function that returns a Stream
         enum StreamOrFn<F: Fn() -> S2, S: Clone, S2> {
             Stream(S),
             F(F),
@@ -212,6 +226,8 @@ impl Declare<True> {
                                 CollectSource::Var(v) => {
                                     let v = v.unwrap();
                                     Arc::new(StreamOrFn::Stream(futures::stream::repeat_with(
+                                        // just keep cloning that var value into a vec
+                                        // no polling is needed, as the vars are static
                                         move || {
                                             Ok((vec![v.clone(); take.next_size()].into(), vec![]))
                                         },
@@ -225,11 +241,16 @@ impl Declare<True> {
                                         .ok_or_else(|| IntoStreamError::MissingProvider(p))?;
                                     Arc::new(StreamOrFn::F(move || {
                                         use std::mem::{replace, take as mtake};
+
                                         let mut p = p.as_stream();
+
                                         let empty = move || Vec::with_capacity(take.max());
+                                        // Vec to hold the values taken from the provider.
                                         let mut cache = empty();
                                         let mut ars = vec![];
+
                                         let mut size = take.next_size();
+                                        // create stream to take multiple values
                                         futures::stream::poll_fn(move |cx| {
                                             match p.poll_next_unpin(cx) {
                                                 Poll::Pending => Poll::Pending,
@@ -247,9 +268,13 @@ impl Declare<True> {
                                                     }
                                                 }
                                                 Poll::Ready(Some(Err(e))) => {
+                                                    // Don't clear cache, because an Ok() may be
+                                                    // yielded later.
                                                     Poll::Ready(Some(Err(e)))
                                                 }
                                                 Poll::Ready(None) => {
+                                                    // Underlying stream has finished; yield any
+                                                    // cached values, or return None.
                                                     Poll::Ready((!cache.is_empty()).then(|| {
                                                         Ok((
                                                             mtake(&mut cache).into(),
@@ -268,6 +293,7 @@ impl Declare<True> {
                 };
                 let providers = Arc::clone(&providers);
                 then.into_stream_with(move |p| {
+                    // Either get global provider, or local declare
                     providers.get(p).map(|p| p.as_stream()).or_else(|| {
                         collects.get(p).map(|p| {
                             Box::new(p.get())
@@ -283,6 +309,7 @@ impl Declare<True> {
             }
         };
         Ok(stream?.map_ok(|(v, ar)| {
+            // Treat String as JSON if valid.
             let v = match v {
                 serde_json::Value::String(s) => match serde_json::from_str(&s) {
                     Ok(v) => v,

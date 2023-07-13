@@ -95,6 +95,10 @@ impl TryFrom<char> for CharByte {
     }
 }
 
+/// Specific data for deating records from a csv file.
+///
+/// Many of the "default" values described in the book are determined by the csv library's Builder
+/// types, not here. This struct mainly contains possible overrides for those defaults.
 #[derive(Debug, Deserialize, PartialEq, Eq, Default, Clone)]
 pub struct CsvParams {
     pub comment: Option<CharByte>,

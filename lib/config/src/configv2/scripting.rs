@@ -37,17 +37,29 @@ pub fn eval_direct(code: &str) -> Result<String, EvalExprError> {
         .map(|js| js.display().to_string())
 }
 
+/// Container struct for JS runtime data for evaluating pewpew expressions.
 #[derive(Derivative)]
 #[derivative(Debug, PartialEq, Eq)]
 pub struct EvalExpr {
+    /// JS Context and the function to run for expresion evaluation. JS runtime and garbage
+    /// collection are thread-local, so DiplomaticBag is used to make this struct Send
     #[derivative(Debug = "ignore", PartialEq = "ignore")]
     ctx: DiplomaticBag<(RefCell<Context>, JsFunction)>,
     needed: Arc<[Arc<str>]>,
+    /// Cache of the original source used to build this struct. Only used for cloning this struct,
+    /// as execution is all handled by the `Context`.
     script: Arc<str>,
 }
 
+/// `Context` itself is not `Clone`, so EvalExpr keeps the raw data needed to rebuild an
+/// equivalent.
+///
+/// Any possible changes made to the inner `Context` from previous code execution will not be
+/// preserved. Expressions aren't intended to have side effects anyway.
 impl Clone for EvalExpr {
     fn clone(&self) -> Self {
+        // The fact that this `Context` already exists implies that these values should produce
+        // valid output, so it shouldn't ever return an error and panic.
         Self::from_parts(Arc::clone(&self.script), Arc::clone(&self.needed))
             .expect("was already made")
     }
@@ -74,6 +86,7 @@ impl EvalExpr {
             script,
         })
     }
+
     pub fn from_template<T>(script: Vec<Segment<T, True>>) -> Result<Self, CreateExprError>
     where
         T: TemplateType<ProvAllowed = True, EnvsAllowed = False>,
@@ -539,7 +552,7 @@ mod builtins {
 
     #[boa_fn(jsname = "match")]
     fn r#match(s: AnyAsString, regex: &str) -> SJV {
-        // Prevent same Regex fomr being compiled again.
+        // Prevent same Regex from being compiled again.
         static REG_CACHE: Mutex<BTreeMap<String, Result<Regex, regex::Error>>> =
             Mutex::new(BTreeMap::new());
         let s = s.get();
@@ -672,6 +685,13 @@ mod builtins {
         use boa_engine::{object::JsArray, Context, JsResult, JsValue};
         use std::fmt::Display;
 
+        /// This trait must be implemented for any type used as an input parameter on one of the
+        /// helper functions.
+        ///
+        /// boa engine requires JsValues as the inputs, so this trait is used for the purpose of
+        /// reducing boilerplate on the helper functions.
+        ///
+        /// The code that actually calls this method is written by the `#[boa_fn]` macro.
         pub(super) trait JsInput<'a>: Sized + 'a {
             fn from_js(js: &'a JsValue, ctx: &mut Context) -> JsResult<Self>;
         }
@@ -722,6 +742,7 @@ mod builtins {
             }
         }
 
+        /// Function input representing any valid JS expression, coerced to a String
         pub(super) struct AnyAsString(String);
 
         impl JsInput<'_> for AnyAsString {
@@ -736,6 +757,7 @@ mod builtins {
             }
         }
 
+        /// Function input/output representing either number type
         pub(super) enum NumType {
             Int(i64),
             Real(f64),
@@ -760,6 +782,14 @@ mod builtins {
             }
         }
 
+        /// Trait for helper function output.
+        ///
+        /// Any type used as a return type for a `#[boa_fn]` must implement this trait.
+        ///
+        /// boa engine requires JsResult<JsValue> as the output for functions, so this is used to
+        /// reduce boilerplate.
+        ///
+        /// Code that actually calls this method is written by the `#[boa_fn]` macro.
         pub(super) trait AsJsResult {
             fn as_js_result(self, _: &mut Context) -> JsResult<JsValue>;
         }
@@ -794,6 +824,10 @@ mod builtins {
             }
         }
 
+        /// Represents an output that is always a valid JsValue, defaulting to `null` if no value
+        /// is explicitly provided.
+        ///
+        /// In contrast to standard Option<T>, which errors in the None case.
         pub struct OrNull<T>(pub(super) Option<T>);
 
         impl<T> From<Option<T>> for OrNull<T> {

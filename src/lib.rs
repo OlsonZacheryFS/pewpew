@@ -954,7 +954,6 @@ fn create_try_run_future(
 
     // create the endpoints
     for mut endpoint in config.endpoints.into_iter() {
-        //let required_providers = mem::take(&mut endpoint.required_providers);
         let required_providers = endpoint.get_required_providers();
 
         let provides_set = endpoint
@@ -1079,20 +1078,25 @@ fn create_load_test_future(
         stats_tx: stats_tx.clone(),
     };
 
+    // Create Futures that run each the load test on each endpoint.
     let endpoint_calls = builders
         .into_iter()
         .map(move |builder| builder.build(&builder_ctx).into_future());
 
     let _ = stats_tx.unbounded_send(StatsMessage::Start(duration));
+    // New Future that runs all the endpoint futures.
     let mut f = try_join_all(endpoint_calls);
     let mut test_timeout = Delay::new(duration);
     let mut test_ended_rx = BroadcastStream::new(test_ended_tx.subscribe());
+    // Future that checks for test end, either naturally or forced.
     let f = future::poll_fn(move |cx| match f.poll_unpin(cx) {
         Poll::Ready(r) => {
+            // Test is done normally.
             let _ = test_ended_tx.send(r.map(|_| TestEndReason::Completed));
             Poll::Ready(())
         }
         Poll::Pending => match test_ended_rx.poll_next_unpin(cx).map(|_| ()) {
+            // check if test is forced to stop
             Poll::Ready(_) => Poll::Ready(()),
             Poll::Pending => match test_timeout.poll_unpin(cx) {
                 Poll::Ready(_) => {

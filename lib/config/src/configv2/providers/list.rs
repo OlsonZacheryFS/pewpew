@@ -41,6 +41,11 @@ impl IntoIterator for ListProvider {
     }
 }
 
+/// List can be defined with parameters, or just a list.
+///
+/// JustAList definition fille in default values for other structs.
+/// Gets converted into "main" list provider data so exposed APIs don't need to consider enum
+/// variants and can just read the data.
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 enum ListProviderTmp {

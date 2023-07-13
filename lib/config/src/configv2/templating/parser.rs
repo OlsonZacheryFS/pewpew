@@ -38,7 +38,9 @@ pub enum Segment<T: TemplateType, IN: Bool = False> {
     Prov(String, #[derivative(Debug = "ignore")] T::ProvAllowed),
     Expr(
         Vec<Segment<T, True>>,
-        #[derivative(Debug = "ignore")] IN::Inverse,
+        /// Any Segment type other than Expr is allowed nested
+        #[derivative(Debug = "ignore")]
+        IN::Inverse,
     ),
 }
 
@@ -260,6 +262,10 @@ mod tests {
 }
 
 mod ast {
+    //! Parser for the raw tag-content structure.
+    //!
+    //! Checking for the specific tag types and which ones are allowed is done by the main parser
+    //! module.
     use nom::{
         branch::alt,
         bytes::complete::tag,
@@ -296,6 +302,12 @@ mod ast {
             value(Self::EscapedDollarSign, tag("$$"))(input)
         }
 
+        /// `inner` check is to allow for "}" in the top level source
+        ///
+        /// # Example:
+        /// `r#"{"a": 1, "b": ${p:e}}"#`
+        ///
+        /// without the inner check, the last '}' can't be parsed.
         fn literal<E: ParseError<&'a str>>(inner: bool) -> impl Parser<&'a str, Raw<'a>, E> {
             recognize(many1(none_of(if inner { "$}" } else { "$" }))).map(Self::Literal)
         }
