@@ -20,7 +20,7 @@ Some special values are available to Query expressions.
 - `response`: Contains Response data. Has the properties
   - `start-line`
   - `headers`
-  - `headers_all`
+  - `headers-all`
   - `body`
   - `status`
 - `stats`
