@@ -1,4 +1,4 @@
-use boa_engine::JsValue;
+use boa_engine::{syntax::parser::ParseError, JsValue};
 use std::{error::Error as SError, sync::Arc};
 use thiserror::Error;
 
@@ -93,4 +93,44 @@ pub(crate) enum EvalExprErrorInner {
     ExecutionError(JsValue),
     #[error("expression returned invalid json: {}", .0.display())]
     InvalidResultJson(JsValue),
+}
+
+#[derive(Debug, Error)]
+pub enum QueryGenError {
+    #[error("parser error: {0:?}")]
+    ParseError(ParseError),
+    #[error("failed to compile js code: {0}")]
+    JsCompile(String),
+    #[error("invalid select: {0}")]
+    Select(#[source] Box<Self>),
+    #[error("invalid for_each: {0}")]
+    ForEach(#[source] Box<Self>),
+    #[error("invalid where: {0}")]
+    Where(Box<Self>),
+    #[error("invalid JSON: {0}")]
+    FromJson(#[from] serde_json::Error),
+}
+
+impl QueryGenError {
+    pub(crate) fn js_compile(js: JsValue) -> Self {
+        Self::JsCompile(js.display().to_string())
+    }
+
+    pub(crate) fn select(self) -> Self {
+        Self::Select(Box::new(self))
+    }
+
+    pub(crate) fn for_each(self) -> Self {
+        Self::ForEach(Box::new(self))
+    }
+
+    pub(crate) fn r#where(self) -> Self {
+        Self::Where(Box::new(self))
+    }
+}
+
+impl From<ParseError> for QueryGenError {
+    fn from(value: ParseError) -> Self {
+        Self::ParseError(value)
+    }
 }

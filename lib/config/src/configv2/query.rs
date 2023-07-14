@@ -18,7 +18,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::error::{EvalExprError, EvalExprErrorInner};
+use crate::error::{EvalExprError, EvalExprErrorInner, QueryGenError};
 
 type SelectTmp = Select<Arc<str>>;
 
@@ -43,7 +43,7 @@ impl Query {
         select: String,
         for_each: Vec<String>,
         r#where: Option<String>,
-    ) -> Result<Self, &'static str> {
+    ) -> Result<Self, QueryGenError> {
         QueryTmp {
             select: SelectTmp::Expr(Arc::from(select)),
             for_each,
@@ -52,7 +52,7 @@ impl Query {
         .try_into()
     }
 
-    pub fn from_json(json: &str) -> Result<Self, &'static str> {
+    pub fn from_json(json: &str) -> Result<Self, QueryGenError> {
         fn json_to_select(sjv: SJVal) -> SelectTmp {
             match sjv {
                 SJVal::String(s) => Select::Expr(Arc::from(s)),
@@ -66,7 +66,7 @@ impl Query {
                 _ => unimplemented!(),
             }
         }
-        let structure = serde_json::from_str(json).map_err(|_| "invalid json")?;
+        let structure = serde_json::from_str(json)?;
 
         QueryTmp {
             select: json_to_select(structure),
@@ -78,7 +78,7 @@ impl Query {
 }
 
 impl TryFrom<QueryTmp> for Query {
-    type Error = &'static str;
+    type Error = QueryGenError;
 
     fn try_from(value: QueryTmp) -> Result<Self, Self::Error> {
         DiplomaticBag::new(move |_| QueryInner::try_from(Rc::new(value)))
@@ -117,24 +117,24 @@ struct QueryTmp {
 }
 
 impl TryFrom<Rc<QueryTmp>> for QueryInner {
-    type Error = &'static str;
+    type Error = QueryGenError;
 
     fn try_from(value: Rc<QueryTmp>) -> Result<Self, Self::Error> {
         let ctx = get_context();
         let select = value
             .select
             .compile(&mut ctx.borrow_mut())
-            .ok_or("invalid select")?;
+            .map_err(QueryGenError::select)?;
         let for_each = value
             .for_each
             .iter()
             .map(|fe| compile(&fe, &mut ctx.borrow_mut()))
-            .collect::<Option<Vec<_>>>()
-            .ok_or("invalid for_each")?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(QueryGenError::for_each)?;
         let r#where = value
             .r#where
             .as_ref()
-            .map(|w| compile(&w, &mut ctx.borrow_mut()).ok_or("invalid where"))
+            .map(|w| compile(&w, &mut ctx.borrow_mut()).map_err(QueryGenError::r#where))
             .transpose()?;
 
         Ok(Self {
@@ -147,11 +147,11 @@ impl TryFrom<Rc<QueryTmp>> for QueryInner {
     }
 }
 
-fn compile(src: &str, ctx: &mut Context) -> Option<Gc<CodeBlock>> {
+fn compile(src: &str, ctx: &mut Context) -> Result<Gc<CodeBlock>, QueryGenError> {
     use boa_engine::syntax::Parser;
 
-    let code = Parser::new(src.as_bytes()).parse_all(ctx).ok()?;
-    ctx.compile(&code).ok()
+    let code = Parser::new(src.as_bytes()).parse_all(ctx)?;
+    ctx.compile(&code).map_err(QueryGenError::js_compile)
 }
 
 fn get_context() -> RefCell<Context> {
@@ -254,20 +254,20 @@ enum Select<T = Gc<CodeBlock>> {
 }
 
 impl SelectTmp {
-    fn compile(&self, ctx: &mut Context) -> Option<Select> {
+    fn compile(&self, ctx: &mut Context) -> Result<Select, QueryGenError> {
         match self {
             Self::Expr(src) => compile(&src, ctx).map(Select::Expr),
             Self::Map(m) => m
                 .into_iter()
                 .map(|(k, v)| v.compile(ctx).map(|v| (k.clone(), v)))
-                .collect::<Option<BTreeMap<_, _>>>()
+                .collect::<Result<BTreeMap<_, _>, _>>()
                 .map(Select::Map),
             Self::List(l) => l
                 .into_iter()
                 .map(|v| v.compile(ctx))
-                .collect::<Option<Vec<_>>>()
+                .collect::<Result<Vec<_>, _>>()
                 .map(Select::List),
-            Self::Int(i) => Some(Select::Int(*i)),
+            Self::Int(i) => Ok(Select::Int(*i)),
         }
     }
 }
