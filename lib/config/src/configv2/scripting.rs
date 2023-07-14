@@ -459,7 +459,12 @@ mod builtins {
     use regex::Regex;
     use scripting_macros::boa_fn;
     use serde_json::Value as SJV;
-    use std::{borrow::Cow, cmp::Ordering, collections::BTreeMap, sync::Mutex};
+    use std::{
+        borrow::Cow,
+        cmp::Ordering,
+        collections::BTreeMap,
+        sync::{Arc, Mutex},
+    };
 
     #[boa_fn]
     fn encode(s: AnyAsString, e: Encoding) -> String {
@@ -529,13 +534,23 @@ mod builtins {
     #[boa_fn]
     fn json_path(v: SJV, s: &str) -> Vec<SJV> {
         use jsonpath_lib::Node;
-        static PATH_CACHE: Mutex<BTreeMap<String, Result<Node, String>>> =
-            Mutex::new(BTreeMap::new());
-        let mut p_lock = PATH_CACHE.lock().unwrap();
-        let path = p_lock
-            .entry(s.to_owned())
-            .or_insert_with(|| jsonpath_lib::Parser::compile(s));
-        let path = match path {
+        fn get_node(s: &str) -> Arc<Result<Node, String>> {
+            static PATH_CACHE: Mutex<BTreeMap<String, Arc<Result<Node, String>>>> =
+                Mutex::new(BTreeMap::new());
+
+            match PATH_CACHE.lock() {
+                Ok(mut c) => c
+                    .entry(s.to_owned())
+                    .or_insert_with(|| Arc::new(jsonpath_lib::Parser::compile(s)))
+                    .clone(),
+                Err(_) => {
+                    log::warn!("jsonpath cache Mutex has been poisoned");
+                    Arc::new(jsonpath_lib::Parser::compile(s))
+                }
+            }
+        }
+        let path = get_node(s);
+        let path = match &*path {
             Ok(p) => p,
             Err(e) => {
                 log::error!("invalid json path {s:?} ({e})");
@@ -553,21 +568,31 @@ mod builtins {
     #[boa_fn(jsname = "match")]
     fn r#match(s: AnyAsString, regex: &str) -> SJV {
         // Prevent same Regex from being compiled again.
-        static REG_CACHE: Mutex<BTreeMap<String, Result<Regex, regex::Error>>> =
-            Mutex::new(BTreeMap::new());
+        fn get_reg(reg: &str) -> Arc<Result<Regex, regex::Error>> {
+            static REG_CACHE: Mutex<BTreeMap<String, Arc<Result<Regex, regex::Error>>>> =
+                Mutex::new(BTreeMap::new());
+
+            match REG_CACHE.lock() {
+                Ok(mut c) => c
+                    .entry(reg.to_owned())
+                    .or_insert_with(|| Arc::new(Regex::new(reg)))
+                    .clone(),
+                Err(_) => {
+                    log::warn!("regex cache mutex has been poisoned");
+                    Arc::new(Regex::new(reg))
+                }
+            }
+        }
         let s = s.get();
-        let mut c_lock = REG_CACHE.lock().unwrap();
-        let reg = c_lock
-            .entry(regex.to_owned())
-            .or_insert_with(|| Regex::new(regex));
-        let reg = match reg {
+        let reg = get_reg(regex);
+        let reg = match &*reg {
             Ok(reg) => reg,
             Err(e) => {
                 log::error!("string {regex:?} is not a valid Regex ({e})");
                 return SJV::Null;
             }
         };
-        let caps = match dbg!(reg.captures(&s)) {
+        let caps = match reg.captures(&s) {
             Some(c) => c,
             None => return SJV::Null,
         };
