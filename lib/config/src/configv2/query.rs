@@ -4,7 +4,6 @@ use boa_engine::{
     vm::CodeBlock,
     Context, JsResult, JsValue,
 };
-use derivative::Derivative;
 use diplomatic_bag::DiplomaticBag;
 use gc::Gc;
 use itertools::Itertools;
@@ -15,14 +14,15 @@ use std::{
     collections::{BTreeMap, VecDeque},
     convert::{TryFrom, TryInto},
     fmt,
+    rc::Rc,
     sync::Arc,
 };
 
 use crate::error::{EvalExprError, EvalExprErrorInner};
 
-type SelectTmp = Select<String>;
+type SelectTmp = Select<Arc<str>>;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(try_from = "QueryTmp")]
 pub struct Query(DiplomaticBag<QueryInner>);
 
@@ -45,9 +45,33 @@ impl Query {
         r#where: Option<String>,
     ) -> Result<Self, &'static str> {
         QueryTmp {
-            select: SelectTmp::Expr(select),
+            select: SelectTmp::Expr(Arc::from(select)),
             for_each,
             r#where,
+        }
+        .try_into()
+    }
+
+    pub fn from_json(json: &str) -> Result<Self, &'static str> {
+        fn json_to_select(sjv: SJVal) -> SelectTmp {
+            match sjv {
+                SJVal::String(s) => Select::Expr(Arc::from(s)),
+                SJVal::Number(n) => Select::Int(n.as_i64().unwrap_or_default()),
+                SJVal::Array(m) => Select::List(m.into_iter().map(json_to_select).collect()),
+                SJVal::Object(m) => Select::Map(
+                    m.into_iter()
+                        .map(|(k, v)| (Arc::from(k), json_to_select(v)))
+                        .collect(),
+                ),
+                _ => unimplemented!(),
+            }
+        }
+        let structure = serde_json::from_str(json).map_err(|_| "invalid json")?;
+
+        QueryTmp {
+            select: json_to_select(structure),
+            for_each: vec![],
+            r#where: None,
         }
         .try_into()
     }
@@ -57,7 +81,7 @@ impl TryFrom<QueryTmp> for Query {
     type Error = &'static str;
 
     fn try_from(value: QueryTmp) -> Result<Self, Self::Error> {
-        DiplomaticBag::new(move |_| QueryInner::try_from(value))
+        DiplomaticBag::new(move |_| QueryInner::try_from(Rc::new(value)))
             .transpose()
             .map_err(DiplomaticBag::into_inner)
             .map(Self)
@@ -69,6 +93,13 @@ struct QueryInner {
     for_each: Vec<Gc<CodeBlock>>,
     r#where: Option<Gc<CodeBlock>>,
     ctx: RefCell<Context>,
+    src: Rc<QueryTmp>,
+}
+
+impl Clone for QueryInner {
+    fn clone(&self) -> Self {
+        Self::try_from(Rc::clone(&self.src)).expect("was already made")
+    }
 }
 
 impl fmt::Debug for QueryInner {
@@ -85,10 +116,10 @@ struct QueryTmp {
     r#where: Option<String>,
 }
 
-impl TryFrom<QueryTmp> for QueryInner {
+impl TryFrom<Rc<QueryTmp>> for QueryInner {
     type Error = &'static str;
 
-    fn try_from(value: QueryTmp) -> Result<Self, Self::Error> {
+    fn try_from(value: Rc<QueryTmp>) -> Result<Self, Self::Error> {
         let ctx = get_context();
         let select = value
             .select
@@ -96,12 +127,13 @@ impl TryFrom<QueryTmp> for QueryInner {
             .ok_or("invalid select")?;
         let for_each = value
             .for_each
-            .into_iter()
+            .iter()
             .map(|fe| compile(&fe, &mut ctx.borrow_mut()))
             .collect::<Option<Vec<_>>>()
             .ok_or("invalid for_each")?;
         let r#where = value
             .r#where
+            .as_ref()
             .map(|w| compile(&w, &mut ctx.borrow_mut()).ok_or("invalid where"))
             .transpose()?;
 
@@ -110,6 +142,7 @@ impl TryFrom<QueryTmp> for QueryInner {
             for_each,
             r#where,
             ctx,
+            src: value,
         })
     }
 }
@@ -211,22 +244,22 @@ impl QueryInner {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(untagged)]
 enum Select<T = Gc<CodeBlock>> {
     Expr(T),
-    Map(BTreeMap<String, Self>),
+    Map(BTreeMap<Arc<str>, Self>),
     List(Vec<Self>),
     Int(i64),
 }
 
 impl SelectTmp {
-    fn compile(self, ctx: &mut Context) -> Option<Select> {
+    fn compile(&self, ctx: &mut Context) -> Option<Select> {
         match self {
             Self::Expr(src) => compile(&src, ctx).map(Select::Expr),
             Self::Map(m) => m
                 .into_iter()
-                .map(|(k, v)| v.compile(ctx).map(|v| (k, v)))
+                .map(|(k, v)| v.compile(ctx).map(|v| (k.clone(), v)))
                 .collect::<Option<BTreeMap<_, _>>>()
                 .map(Select::Map),
             Self::List(l) => l
@@ -234,7 +267,7 @@ impl SelectTmp {
                 .map(|v| v.compile(ctx))
                 .collect::<Option<Vec<_>>>()
                 .map(Select::List),
-            Self::Int(i) => Some(Select::Int(i)),
+            Self::Int(i) => Some(Select::Int(*i)),
         }
     }
 }
@@ -244,13 +277,13 @@ impl Select {
         match self {
             Self::Expr(code) => ctx.execute(code.clone()),
             Self::Map(m) => {
-                let m: BTreeMap<&str, JsValue> = m
+                let m: BTreeMap<Arc<str>, JsValue> = m
                     .iter()
-                    .map(|(k, v)| Ok((k.as_str(), v.select(ctx)?)))
+                    .map(|(k, v)| Ok((k.clone(), v.select(ctx)?)))
                     .collect::<JsResult<_>>()?;
                 let mut obj = ObjectInitializer::new(ctx);
                 for (k, v) in m {
-                    obj.property(k, v, Attribute::READONLY);
+                    obj.property(k.to_string(), v, Attribute::READONLY);
                 }
 
                 Ok(obj.build().into())
@@ -272,11 +305,11 @@ mod tests {
     #[test]
     fn test_queries() {
         let q = QueryTmp {
-            select: SelectTmp::Expr("response.body.session".to_owned()),
+            select: SelectTmp::Expr(Arc::from("response.body.session".to_owned())),
             r#where: Some("response.status < 400".to_owned()),
             for_each: vec![],
         };
-        let q = QueryInner::try_from(q).unwrap();
+        let q = QueryInner::try_from(Rc::new(q)).unwrap();
         let response = serde_json::json! { {"body": {"session": "abc123"}, "status": 200} };
         let res = q
             .query(Arc::new(serde_json::json!({ "response": response })))
@@ -285,17 +318,17 @@ mod tests {
             .unwrap();
         assert_eq!(res, vec![SJVal::String("abc123".to_owned())]);
 
-        let q = QueryInner::try_from(QueryTmp {
+        let q = QueryInner::try_from(Rc::new(QueryTmp {
             select: SelectTmp::Map(
                 [(
-                    "name".to_owned(),
-                    SelectTmp::Expr("for_each[0].name".to_owned()),
+                    Arc::from("name".to_owned()),
+                    SelectTmp::Expr(Arc::from("for_each[0].name".to_owned())),
                 )]
                 .into(),
             ),
             r#where: Some("true".to_owned()),
             for_each: vec!["response.body.characters".to_owned()],
-        })
+        }))
         .unwrap();
         let response = serde_json::json! {
             {"body":    {

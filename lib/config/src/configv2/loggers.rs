@@ -6,7 +6,7 @@ use super::{
 };
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Logger<VD: Bool = True> {
     pub query: Option<super::query::Query>,
     pub to: LogTo<VD>,

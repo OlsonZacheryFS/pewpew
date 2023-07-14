@@ -1,5 +1,6 @@
 use crate::common::ProviderSend;
 
+use self::endpoints::EndpointLogs;
 use self::error::{EnvsError, InvalidForLoadTest, LoadTestGenError, VarsError};
 use self::templating::{Bool, EnvsOnly, False, Template, True};
 use itertools::Itertools;
@@ -171,7 +172,15 @@ impl LoadTest<True, True> {
     }
 
     pub fn add_logger(&mut self, name: String, l: Logger) -> Result<(), ()> {
-        self.loggers.insert(name, l);
+        self.loggers.insert(name.clone(), l.clone());
+        self.endpoints.iter_mut().for_each(|e| {
+            e.logs.push((
+                name.clone(),
+                EndpointLogs {
+                    query: l.query.clone().unwrap(),
+                },
+            ))
+        });
         // TODO: when should error?
         Ok(())
     }

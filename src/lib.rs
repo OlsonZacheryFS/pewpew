@@ -13,6 +13,7 @@ mod util;
 use crate::error::TestError;
 use crate::stats::{create_stats_channel, create_try_run_stats_channel, StatsMessage};
 
+use config::query::Query;
 use config::{self, common::ProviderSend, loggers::LogTo, templating::Template, LoadTest, Logger};
 
 use clap::{Args, Subcommand, ValueEnum};
@@ -854,19 +855,26 @@ fn create_try_run_future(
     // create a logger for the try run
     // request.headers only logs single Accept Headers due to JSON requirements. Use headers_all instead
     let select = if matches!(try_config.format, TryRunFormat::Human) {
-        r#""`\
-         Request\n\
-         ========================================\n\
-         ${request['start-line']}\n\
-         ${join(request.headers_all, '\n', ': ')}\n\
-         ${if(request.body != '', '\n${request.body}\n', '')}\n\
-         Response (RTT: ${stats.rtt}ms)\n\
-         ========================================\n\
-         ${response['start-line']}\n\
-         ${join(response.headers_all, '\n', ': ')}\n\
-         ${if(response.body != '', '\n${response.body}', '')}\n\n`""#
+        Query::simple(
+            r#"`\
+Request\n\
+========================================\n\
+${request['start-line']}\n\
+${join(request['headers_all'], '\n', ': ')}\n\
+${request.body != '' ? request.body : ''}\n\
+
+Response (RTT: ${stats.rtt}ms)\n\
+========================================\n\
+${response['start-line']}\n\
+${join(response['headers-all'], '\n', ': ')}\n\
+${response.body != '' ? JSON.stringify(response.body) : ''}\n\n`"#
+                .to_string(),
+            vec![],
+            None,
+        )
     } else {
-        r#"{
+        Query::from_json(
+            r#"{
             "request": {
                 "start-line": "request['start-line']",
                 "headers": "request.headers_all",
@@ -874,22 +882,21 @@ fn create_try_run_future(
             },
             "response": {
                 "start-line": "response['start-line']",
-                "headers": "response.headers_all",
+                "headers": "response['headers-all']",
                 "body": "response.body"
             },
             "stats": {
                 "RTT": "stats.rtt"
             }
-        })"#
+        }"#,
+        )
     };
-    //let to = try_config.file.unwrap_or_else(|| "stdout".into());
-    //let logger = config::LoggerPreProcessed::from_str(select, &to).unwrap();
     let to = try_config.file.map_or(LogTo::Stdout, |path| {
         LogTo::File(Template::new_literal(path))
     });
-    // TODO: what are these values supposed to default to?
+    // TODO: double check values for pretty/kill/true
     let logger = Logger {
-        query: None,
+        query: Some(select.expect("should be valid")),
         to,
         pretty: true,
         kill: true,
@@ -1166,7 +1173,6 @@ fn get_loggers_from_config(
     config_loggers
         .into_iter()
         .map(|(name, logger)| {
-            //let to = mem::take(&mut logger.to);
             let name2 = name.clone();
             let writer = match &logger.to {
                 LogTo::Stdout => stdout.clone(),

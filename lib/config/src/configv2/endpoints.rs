@@ -268,7 +268,7 @@ impl From<EndpointProvides> for (Query, ProviderSend) {
 #[derive(Debug, Deserialize)]
 #[serde(transparent)]
 pub struct EndpointLogs {
-    query: Query,
+    pub(crate) query: Query,
 }
 
 impl From<EndpointLogs> for (Query, ProviderSend) {
