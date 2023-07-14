@@ -92,6 +92,7 @@ impl EvalExpr {
         T: TemplateType<ProvAllowed = True, EnvsAllowed = False>,
     {
         let mut needed = Vec::new();
+        let mut uses_prov = false;
         let script = Arc::from(format!(
             "function ____eval(____provider_values){{ return {}; }}",
             script
@@ -101,6 +102,7 @@ impl EvalExpr {
                     Segment::Prov(p, ..) => {
                         let s = format!("____provider_values.{p}");
                         needed.push(Arc::from(p));
+                        uses_prov = true;
                         s
                     }
                     Segment::Env(_, no) => no.no(),
@@ -108,6 +110,9 @@ impl EvalExpr {
                 })
                 .collect::<String>()
         ));
+        if !uses_prov {
+            log::warn!("R-Template expression ({script:?}) does not read from any providers.")
+        }
         Self::from_parts(script, Arc::from(needed))
     }
 
@@ -723,7 +728,16 @@ mod builtins {
 
         impl JsInput<'_> for serde_json::Value {
             fn from_js(js: &JsValue, ctx: &mut Context) -> JsResult<Self> {
-                js.to_json(ctx)
+                match js {
+                    JsValue::Undefined => {
+                        // prevent todo!-induced panic
+                        log::warn!(
+                            "`undefined` is not currently a valid value for serde_json::Value"
+                        );
+                        Ok(serde_json::Value::Null)
+                    }
+                    js => js.to_json(ctx),
+                }
             }
         }
 

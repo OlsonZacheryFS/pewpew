@@ -23,7 +23,7 @@ pub fn boa_fn(_attrs: TokenStream, input: TokenStream) -> TokenStream {
             // original function
             #fun
 
-
+            ::log::debug!("calling expression function {:?}", stringify!(#name));
             #name (#(JsInput::from_js(args.get_or_undefined(#ac), ctx)?),*).as_js_result(ctx)
         }
     }

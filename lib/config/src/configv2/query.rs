@@ -104,7 +104,7 @@ impl Clone for QueryInner {
 
 impl fmt::Debug for QueryInner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<<query>>")
+        self.src.fmt(f)
     }
 }
 
@@ -164,6 +164,7 @@ impl QueryInner {
         data: Arc<SJVal>,
     ) -> Result<impl Iterator<Item = Result<SJVal, EvalExprErrorInner>>, EvalExprErrorInner> {
         use EvalExprErrorInner::ExecutionError;
+        log::trace!("Running Query: {:?} on data {data:?}", self.src);
         let mut ctx = self.ctx.borrow_mut();
         let ctx = &mut ctx;
         let data = data.as_object().unwrap();
