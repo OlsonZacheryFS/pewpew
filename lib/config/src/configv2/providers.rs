@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::{borrow::Borrow, ops::Deref, str::FromStr, sync::Arc};
+
 use super::{
     common::ProviderSend,
     templating::{Bool, False, True},
@@ -14,6 +16,47 @@ mod range;
 pub use file::{CsvHeaders, CsvParams, FileProvider, FileReadFormat};
 pub use list::ListProvider;
 pub use range::RangeProvider;
+use thiserror::Error;
+
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
+pub struct ProviderName(Arc<str>);
+
+#[derive(Debug, Error, Clone, Copy)]
+#[error("reserved provider name {0:?} found")]
+pub struct ReservedProviderName(&'static str);
+
+impl FromStr for ProviderName {
+    type Err = ReservedProviderName;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "request" => Err(ReservedProviderName("request")),
+            "response" => Err(ReservedProviderName("response")),
+            "stats" => Err(ReservedProviderName("stats")),
+            other => Ok(Self(Arc::from(other))),
+        }
+    }
+}
+
+impl ProviderName {
+    pub fn get(&self) -> Arc<str> {
+        self.0.clone()
+    }
+}
+
+impl Deref for ProviderName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+impl Borrow<str> for ProviderName {
+    fn borrow(&self) -> &str {
+        &*self
+    }
+}
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "snake_case")]

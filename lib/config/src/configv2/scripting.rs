@@ -153,6 +153,7 @@ impl EvalExpr {
         let object = object.build();
         Ok((
             efn.call(&JsValue::Null, &[object.into()], ctx)
+                .map(|js| if js.is_undefined() { JsValue::Null } else { js })
                 .map_err(EvalExprErrorInner::ExecutionError)?
                 .to_json(ctx)
                 .map_err(EvalExprErrorInner::InvalidResultJson)?,

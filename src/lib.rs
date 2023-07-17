@@ -13,6 +13,7 @@ mod util;
 use crate::error::TestError;
 use crate::stats::{create_stats_channel, create_try_run_stats_channel, StatsMessage};
 
+use config::providers::ProviderName;
 use config::query::Query;
 use config::{self, common::ProviderSend, loggers::LogTo, templating::Template, LoadTest, Logger};
 
@@ -667,7 +668,7 @@ fn create_config_watcher(
     run_config: RunConfig,
     config_file_path: PathBuf,
     stats_tx: FCUnboundedSender<StatsMessage>,
-    mut previous_config_providers: BTreeMap<Arc<str>, config::ProviderType>,
+    mut previous_config_providers: BTreeMap<ProviderName, config::ProviderType>,
     mut previous_providers: Arc<BTreeMap<Arc<str>, providers::Provider>>,
 ) {
     let start_time = Instant::now();
@@ -782,8 +783,8 @@ fn create_config_watcher(
             for (name, p) in &config_providers {
                 match previous_config_providers.get(name) {
                     Some(p2) if p == p2 => {
-                        if let Some(p) = previous_providers.get(name) {
-                            providers.insert(name.clone(), p.clone());
+                        if let Some(p) = previous_providers.get(&name.get()) {
+                            providers.insert(name.get(), p.clone());
                         }
                     }
                     _ => (),
@@ -1137,7 +1138,7 @@ type ProvidersResult =
     Result<(BTreeMap<Arc<str>, providers::Provider>, BTreeSet<Arc<str>>), TestError>;
 
 fn get_providers_from_config(
-    config_providers: &BTreeMap<Arc<str>, config::ProviderType>,
+    config_providers: &BTreeMap<ProviderName, config::ProviderType>,
     auto_size: usize,
     test_ended_tx: &broadcast::Sender<Result<TestEndReason, TestError>>,
     config_path: &Path,
@@ -1154,11 +1155,11 @@ fn get_providers_from_config(
                 providers::file(f, test_ended_tx.clone(), name, auto_size)?
             }
             ProviderType::Response(r) => {
-                response_providers.insert(name.clone());
+                response_providers.insert(name.get());
                 providers::response(r, name, auto_size)
             }
         };
-        providers.insert(name.clone(), provider);
+        providers.insert(name.get(), provider);
     }
     Ok((providers, response_providers))
 }

@@ -168,24 +168,18 @@ impl QueryInner {
         let mut ctx = self.ctx.borrow_mut();
         let ctx = &mut ctx;
         let data = data.as_object().unwrap();
-        let response = data.get("response");
-        let request = data.get("request");
-        let stats = data.get("stats");
-        IntoIterator::into_iter([
-            ("request", &request),
-            ("response", &response),
-            ("stats", &stats),
-        ])
-        .map(|(n, o)| {
-            (
-                n,
-                o.and_then(|o| JsValue::from_json(o, ctx).ok())
-                    .unwrap_or(JsValue::Undefined),
-            )
-        })
-        .collect_vec()
-        .into_iter()
-        .for_each(|(n, o)| ctx.register_global_property(n, o, Attribute::READONLY));
+        data.iter()
+            .map(|(n, o)| {
+                (
+                    n,
+                    JsValue::from_json(o, ctx)
+                        .ok()
+                        .unwrap_or(JsValue::Undefined),
+                )
+            })
+            .collect_vec()
+            .into_iter()
+            .for_each(|(n, o)| ctx.register_global_property(n.as_str(), o, Attribute::READONLY));
         let for_each = {
             let for_each: Vec<VecDeque<JsValue>> = self
                 .for_each

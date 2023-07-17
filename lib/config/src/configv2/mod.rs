@@ -2,10 +2,10 @@ use crate::common::ProviderSend;
 
 use self::endpoints::EndpointLogs;
 use self::error::{EnvsError, InvalidForLoadTest, LoadTestGenError, VarsError};
+use self::providers::ProviderName;
 use self::templating::{Bool, EnvsOnly, False, Template, True};
 use itertools::Itertools;
 use serde::Deserialize;
-use std::sync::Arc;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     fmt::{self, Display},
@@ -37,7 +37,7 @@ pub struct LoadTest<VD: Bool = True, ED: Bool = True> {
     #[serde(bound = "load_pattern::LoadPattern<VD>: serde::de::DeserializeOwned")]
     load_pattern: Option<load_pattern::LoadPattern<VD>>,
     vars: Vars<ED>,
-    pub providers: BTreeMap<Arc<str>, ProviderType<VD>>,
+    pub providers: BTreeMap<ProviderName, ProviderType<VD>>,
     pub loggers: BTreeMap<String, Logger<VD>>,
     pub endpoints: Vec<Endpoint<VD>>,
     #[serde(skip)]

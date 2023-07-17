@@ -399,7 +399,7 @@ where
 
 /// Raw templating data, containing segments on where data needs to be read from.
 #[derive(Debug, PartialEq, Eq, Deserialize, Clone)]
-#[serde(try_from = "&str")]
+#[serde(try_from = "Cow<'_, str>")]
 #[serde(bound = "")]
 pub struct TemplatedString<T: TemplateType>(Vec<Segment<T>>);
 
@@ -588,6 +588,14 @@ impl<T: TemplateType> TryFrom<&str> for TemplatedString<T> {
     type Error = <Self as FromStr>::Err;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl<T: TemplateType> TryFrom<Cow<'_, str>> for TemplatedString<T> {
+    type Error = <Self as FromStr>::Err;
+
+    fn try_from(value: Cow<'_, str>) -> Result<Self, Self::Error> {
         value.parse()
     }
 }
