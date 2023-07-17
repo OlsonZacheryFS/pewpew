@@ -33,10 +33,10 @@ providers:
 endpoints:
   - method: POST
     declare:
-      e: !c #collect(b, 3)
+      e: !c
         collects:
           - take: 3
-            from: !v b
+            from: '${v:b}'
             as: _b
         then: ${p:_b}
     url: http://localhost:${v:port}/

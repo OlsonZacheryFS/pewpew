@@ -2,14 +2,13 @@ use crate::{
     configv2::PropagateVars,
     error::{EvalExprError, IntoStreamError, VarsError},
     scripting,
-    templating::{Bool, False, Regular, Template, True, TryDefault},
+    templating::{Bool, False, Regular, Template, True},
 };
 use ether::Either;
 use futures::{Stream, StreamExt, TryStreamExt};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    convert::TryFrom,
     error::Error as StdError,
     sync::Arc,
     task::Poll,
@@ -31,78 +30,9 @@ pub struct Collect<VD: Bool> {
     /// How many values to take.
     take: Take,
     /// Where to take values from.
-    from: CollectSource<VD>,
+    from: Template<String, Regular, VD>,
     /// Name to refer to the resulting array as.
     r#as: String,
-}
-
-/// Specifies where values for a Collect are taken from.
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-enum CollectSource<VD: Bool> {
-    /// Take a var at the path.
-    /// The same var value is cloned for as many times as needed.
-    #[serde(rename = "v")]
-    Var(VarSource<VD>),
-    /// Pull multiple values from the specified provider.
-    #[serde(rename = "p")]
-    Prov(Arc<str>),
-}
-
-impl PropagateVars for CollectSource<False> {
-    type Data<VD: Bool> = CollectSource<VD>;
-
-    fn insert_vars(
-        self,
-        vars: &crate::configv2::Vars<True>,
-    ) -> Result<Self::Data<True>, VarsError> {
-        match self {
-            Self::Prov(p) => Ok(Self::Data::Prov(p)),
-            Self::Var(v) => v.insert_vars(vars).map(Self::Data::Var),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-#[serde(try_from = "String", bound = "")]
-enum VarSource<VD: Bool> {
-    Pre(String, VD::Inverse),
-    Post(serde_json::Value, VD),
-}
-
-impl VarSource<True> {
-    fn unwrap(self) -> serde_json::Value {
-        match self {
-            Self::Pre(_, no) => no.no(),
-            Self::Post(v, True) => v,
-        }
-    }
-}
-
-impl<VD: Bool> TryFrom<String> for VarSource<VD> {
-    type Error = &'static str;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        <VD::Inverse as TryDefault>::try_default()
-            .map(|b| Self::Pre(value, b))
-            .ok_or("wrong one")
-    }
-}
-
-impl PropagateVars for VarSource<False> {
-    type Data<VD: Bool> = VarSource<VD>;
-
-    fn insert_vars(
-        self,
-        vars: &crate::configv2::Vars<True>,
-    ) -> Result<Self::Data<True>, VarsError> {
-        match self {
-            Self::Pre(v, True) => crate::configv2::get_var_at_path(vars, &v)
-                .cloned()
-                .map(|v| Self::Data::Post(v.into(), True))
-                .ok_or_else(|| crate::configv2::VarsError::VarNotFound(v)),
-            Self::Post(_, no) => no.no(),
-        }
-    }
 }
 
 impl PropagateVars for Collect<False> {
@@ -145,6 +75,43 @@ impl Take {
             Self::Rand(_, max) => *max,
         }
     }
+
+    fn collect_stream<E, S: Stream<Item = Result<(T, Vec<Ar>), E>> + Unpin, T, Ar>(
+        self,
+        mut s: S,
+    ) -> impl Stream<Item = Result<(Vec<T>, Vec<Ar>), E>> {
+        use std::mem::{replace, take};
+
+        let mut cache = Vec::with_capacity(self.max());
+        let mut ars = vec![];
+        let mut size = self.next_size();
+        futures::stream::poll_fn(move |ctx| match s.poll_next_unpin(ctx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Some(Ok((v, a)))) => {
+                cache.push(v);
+                ars.extend(a);
+                if cache.len() >= size {
+                    size = self.next_size();
+                    Poll::Ready(Some(Ok((
+                        replace(&mut cache, Vec::with_capacity(size)),
+                        take(&mut ars),
+                    ))))
+                } else {
+                    Poll::Pending
+                }
+            }
+            Poll::Ready(Some(Err(e))) => {
+                // Don't clear cache, because an Ok() may be
+                // yielded later.
+                Poll::Ready(Some(Err(e)))
+            }
+            Poll::Ready(None) => {
+                // Underlying stream has finished; yield any
+                // cached values, or return None.
+                Poll::Ready((!cache.is_empty()).then(|| Ok((take(&mut cache), take(&mut ars)))))
+            }
+        })
+    }
 }
 
 impl PropagateVars for Declare<False> {
@@ -172,10 +139,7 @@ impl Declare<True> {
                 let ases: BTreeSet<_> = collects.iter().map(|c| c.r#as.as_str()).collect();
                 collects
                     .iter()
-                    .filter_map(|c| match &c.from {
-                        CollectSource::Var(_) => None,
-                        CollectSource::Prov(p) => Some(p.clone()),
-                    })
+                    .flat_map(|c| c.from.get_required_providers())
                     .chain(
                         then.get_required_providers()
                             .into_iter()
@@ -198,133 +162,86 @@ impl Declare<True> {
         Ar: Clone + Send + Unpin + 'static,
         E: StdError + Send + Clone + Unpin + 'static + From<EvalExprError>,
     {
-        /// Kind of hacky workaround because PollFn is not Clone.
-        ///
-        /// Contains either a clonable stream, or a function that returns a Stream
-        enum StreamOrFn<F: Fn() -> S2, S: Clone, S2> {
-            Stream(S),
-            F(F),
-        }
-
-        impl<F: Fn() -> S2, S: Clone, S2> StreamOrFn<F, S, S2> {
-            fn get(&self) -> Either<S, S2> {
-                match self {
-                    Self::Stream(s) => Either::A(s.clone()),
-                    Self::F(f) => Either::B(f()),
-                }
+        fn make_stream<S: Clone, F: Fn() -> S2, S2>(e: &Either<S, F>) -> Either<S, S2> {
+            match e {
+                Either::A(s) => Either::A(s.clone()),
+                Either::B(f) => Either::B(f()),
             }
         }
         let stream = match self {
             Self::Expr(t) => t.into_stream(providers).map(Either::A),
             Self::Collects { collects, then } => {
-                let collects = {
-                    let providers = Arc::clone(&providers);
-                    collects
-                        .into_iter()
-                        .map(move |Collect { take, from, r#as }| {
-                            let stream = match from {
-                                CollectSource::Var(v) => {
-                                    let v = v.unwrap();
-                                    Arc::new(StreamOrFn::Stream(futures::stream::repeat_with(
-                                        // just keep cloning that var value into a vec
-                                        // no polling is needed, as the vars are static
-                                        move || {
-                                            Ok((vec![v.clone(); take.next_size()].into(), vec![]))
-                                        },
-                                    )))
-                                }
-                                CollectSource::Prov(p) => {
-                                    let providers = Arc::clone(&providers);
-                                    let p = providers
-                                        .get::<str>(&p)
-                                        .cloned()
-                                        .ok_or_else(|| IntoStreamError::MissingProvider(p))?;
-                                    Arc::new(StreamOrFn::F(move || {
-                                        use std::mem::{replace, take as mtake};
-
-                                        let mut p = p.as_stream();
-
-                                        let empty = move || Vec::with_capacity(take.max());
-                                        // Vec to hold the values taken from the provider.
-                                        let mut cache = empty();
-                                        let mut ars = vec![];
-
-                                        let mut size = take.next_size();
-                                        // create stream to take multiple values
-                                        futures::stream::poll_fn(move |cx| {
-                                            match p.poll_next_unpin(cx) {
-                                                Poll::Pending => Poll::Pending,
-                                                Poll::Ready(Some(Ok((v, ar)))) => {
-                                                    ars.extend(ar);
-                                                    cache.push(v);
-                                                    if cache.len() >= size {
-                                                        size = take.next_size();
-                                                        Poll::Ready(Some(Ok((
-                                                            replace(&mut cache, empty()).into(),
-                                                            mtake(&mut ars),
-                                                        ))))
-                                                    } else {
-                                                        Poll::Pending
-                                                    }
-                                                }
-                                                Poll::Ready(Some(Err(e))) => {
-                                                    // Don't clear cache, because an Ok() may be
-                                                    // yielded later.
-                                                    Poll::Ready(Some(Err(e)))
-                                                }
-                                                Poll::Ready(None) => {
-                                                    // Underlying stream has finished; yield any
-                                                    // cached values, or return None.
-                                                    Poll::Ready((!cache.is_empty()).then(|| {
-                                                        Ok((
-                                                            mtake(&mut cache).into(),
-                                                            mtake(&mut ars),
-                                                        ))
-                                                    }))
-                                                }
-                                            }
-                                        })
-                                    }))
-                                }
-                            };
-                            Ok((r#as, stream))
-                        })
-                        .collect::<Result<BTreeMap<_, _>, IntoStreamError>>()?
-                };
-                let providers = Arc::clone(&providers);
-                then.into_stream_with(move |p| {
-                    // Either get global provider, or local declare
-                    providers.get(p).map(|p| p.as_stream()).or_else(|| {
-                        collects.get(p).map(|p| {
-                            Box::new(p.get())
+                let collects = collects
+                    .into_iter()
+                    .map(|Collect { take, from, r#as }| {
+                        let providers = providers.clone();
+                        let stream = {
+                            match from.as_static().map(ToOwned::to_owned) {
+                                Some(v) => Either::A(futures::stream::repeat_with(move || {
+                                    Ok((
+                                        vec![
+                                            serde_json::Value::String(v.clone());
+                                            take.next_size()
+                                        ]
+                                        .into(),
+                                        vec![],
+                                    ))
+                                })),
+                                None => Either::B({
+                                    let _ = from.clone().into_stream(Arc::clone(&providers))?;
+                                    move || {
+                                        take.collect_stream(
+                                            from.clone()
+                                                .into_stream(Arc::clone(&providers))
+                                                .expect("just checked"),
+                                        )
+                                    }
+                                }),
+                            }
+                        };
+                        Ok((r#as, move || make_stream(&stream)))
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()?;
+                let collects = Arc::new(collects);
+                then.into_stream_with(move |pn| {
+                    providers.get(pn).map(|p| p.as_stream()).or_else(|| {
+                        collects.get(pn).and_then(|p| {
+                            let p = p();
+                            let p = p.map_ok(|(val, ar)| (val.into(), ar));
+                            let p = Box::new(p)
                                 as Box<
                                     dyn Stream<Item = Result<(serde_json::Value, Vec<Ar>), E>>
                                         + Send
                                         + Unpin,
-                                >
+                                >;
+                            Some(p)
                         })
                     })
                 })
                 .map(Either::B)
             }
-        };
-        Ok(stream?.map_ok(|(v, ar)| {
-            // Treat String as JSON if valid.
-            let v = match v {
-                serde_json::Value::String(s) => match serde_json::from_str(&s) {
-                    Ok(v) => v,
-                    Err(_) => serde_json::Value::String(s),
+        }?;
+        Ok(stream.map_ok(|(v, ar)| {
+            (
+                match v {
+                    serde_json::Value::String(s) => match serde_json::from_str(&s) {
+                        Ok(v) => v,
+                        Err(_) => serde_json::Value::String(s),
+                    },
+                    other => other,
                 },
-                other => other,
-            };
-            (v, ar)
+                ar,
+            )
         }))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::templating::ExprSegment;
+    use crate::{
+        configv2::VarValue,
+        templating::{ExprSegment, TryDefault},
+    };
 
     use super::*;
     use serde_yaml::from_str as from_yaml;
@@ -346,7 +263,7 @@ mod tests {
         let input = r#"!c
         collects:
           - take: 3
-            from: !p a
+            from: ${p:a}
             as: _a
         then: ${p:_a}"#;
         let decl = from_yaml::<Declare<False>>(input)
@@ -359,7 +276,10 @@ mod tests {
             Declare::Collects {
                 collects: vec![Collect {
                     take: Take::Fixed(3),
-                    from: CollectSource::Prov("a".into()),
+                    from: Template::NeedsProviders {
+                        script: vec![ExprSegment::ProvDirect("a".into())],
+                        __dontuse: (True, True, True)
+                    },
                     r#as: "_a".into()
                 }],
                 then: Template::NeedsProviders {
@@ -371,15 +291,21 @@ mod tests {
         let input = r#"!c
         collects:
           - take: 3
-            from: !p a
+            from: ${p:a}
             as: _a
           - take: [4, 7]
-            from: !p b
+            from: ${p:b}
             as: _b
-        then: ${p:_a}${p:_b}"#;
+          - take: 3
+            from: ${v:c}
+            as: _c
+        then: ${p:_a}${p:_b}${p:_c}"#;
         let decl = from_yaml::<Declare<False>>(input)
             .unwrap()
-            .insert_vars(&BTreeMap::new())
+            .insert_vars(&BTreeMap::from([(
+                "c".into(),
+                VarValue::Str(Template::new_literal("foo".into())),
+            )]))
             .unwrap();
         assert_eq!(
             decl.get_required_providers(),
@@ -391,19 +317,31 @@ mod tests {
                 collects: vec![
                     Collect {
                         take: Take::Fixed(3),
-                        from: CollectSource::Prov("a".into()),
+                        from: Template::NeedsProviders {
+                            script: vec![ExprSegment::ProvDirect("a".into())],
+                            __dontuse: (True, True, True)
+                        },
                         r#as: "_a".into()
                     },
                     Collect {
                         take: Take::Rand(4, 7),
-                        from: CollectSource::Prov("b".into()),
+                        from: Template::NeedsProviders {
+                            script: vec![ExprSegment::ProvDirect("b".into())],
+                            __dontuse: (True, True, True)
+                        },
                         r#as: "_b".into()
+                    },
+                    Collect {
+                        take: Take::Fixed(3),
+                        from: Template::new_literal("foo".into()),
+                        r#as: "_c".into()
                     }
                 ],
                 then: Template::NeedsProviders {
                     script: vec![
                         ExprSegment::ProvDirect("_a".into()),
-                        ExprSegment::ProvDirect("_b".into())
+                        ExprSegment::ProvDirect("_b".into()),
+                        ExprSegment::ProvDirect("_c".into()),
                     ],
                     __dontuse: TryDefault::try_default().unwrap()
                 }

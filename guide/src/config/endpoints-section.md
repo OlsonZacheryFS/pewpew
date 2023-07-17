@@ -193,7 +193,7 @@ The *declare_subsection* is in the format of key/value pairs where the value is 
 <pre>
 collects:
   - take: <i>take</i>
-    from: !p <i>provider</i> | !v <i>var</i>
+    from: <i>template</i>
     as: <i>name</i>
 then: <i>template</i>
 </pre>
@@ -202,7 +202,8 @@ then: <i>template</i>
 
 - `take`: define how many values to take from this provider. Can either be a single number, or a
   pair of two numbers defining a random range.
-- `from`: specify either a provider or a variable to read the values from
+- `from`: An [R-Template](./common-types/templates.md#template-types) that defines the value
+  source to be repeated.
 - `as`: set a name for this collection. This name can be used to interpolate the collection
   in the `then` entry
 
@@ -215,10 +216,10 @@ Every key can function as a provider and can be interpolated just as a provider 
 ```yaml
 endpoints:
   - declare:
-      shidIds:
+      shidIds: !c
         collects:
           - take: [3, 5]
-            from: !p shipId
+            from: ${p:shipId}
             as: _ids
         then: ${p:_ids}
     method: DELETE

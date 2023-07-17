@@ -147,14 +147,14 @@ declare:
   ids: !c
     collects:
       - take: [4, 7]
-        from: id
+        from: ${p:id}
         as: _ids
     then: ${p:_ids}
   other_id: !x ${p:id}
-  foo:
+  foo: !c
     collects:
       - take: 8
-        from: bar
+        from: ${p:bar}
         as: _foo
     then: ${x:entries(${p:_foo})}
 ```
