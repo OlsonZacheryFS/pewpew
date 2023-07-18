@@ -531,10 +531,17 @@ impl<T: TemplateType<VarsAllowed = True, EnvsAllowed = False>> PropagateVars
                             .into_iter()
                             .map(|s| match s {
                                 Segment::Raw(s) => s,
-                                _ => unreachable!(),
+                                Segment::Env(_, no) => no.no(),
+                                Segment::Expr(_, no) => no.no(),
+                                Segment::Var(_, True) => unreachable!("just inserted vars"),
+                                Segment::Prov(..) => unreachable!("checked for no prov"),
                             })
                             .collect::<String>();
-                        Ok(Segment::Raw(super::scripting::eval_direct(&code)?))
+                        Ok(Segment::Raw(
+                            super::scripting::eval_direct(&code)?
+                                .trim_matches('"')
+                                .to_owned(),
+                        ))
                     }
                 }
                 other => Ok(other),

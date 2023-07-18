@@ -37,6 +37,7 @@ pub struct LoadTest<VD: Bool = True, ED: Bool = True> {
     #[serde(bound = "load_pattern::LoadPattern<VD>: serde::de::DeserializeOwned")]
     load_pattern: Option<load_pattern::LoadPattern<VD>>,
     vars: Vars<ED>,
+    #[serde(default = "BTreeMap::new")]
     pub providers: BTreeMap<ProviderName, ProviderType<VD>>,
     pub loggers: BTreeMap<String, Logger<VD>>,
     pub endpoints: Vec<Endpoint<VD>>,
