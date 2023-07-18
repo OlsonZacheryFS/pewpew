@@ -19,6 +19,9 @@ sent into a provider. In addition to standard JS operations, some helper functio
 > The pewpew 0.5.x expression functions `if()`, `min()`, and `max()` are removed, as JS itself
 > has alternatives; respectively: ternaries, `Math.max()`, and `Math.min()`.
 
+> **WARNING**: Please ensure that no expression ultimately evaluates to `undefined`. The JS engine
+> doesn't handle converting that very well.
+
 ## Helper functions
 
 <table>
