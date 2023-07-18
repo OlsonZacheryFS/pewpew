@@ -102,7 +102,7 @@ endpoints:
   - method: DELETE
     url: 'http://localhost:${v:port}?id=${p:testId}?include-children=true'
     tags:
-      status: '${p:response.status}'
+      status: '${x:${p:response}.status}'
     peak_load: 1hps
     logs:
       test:
