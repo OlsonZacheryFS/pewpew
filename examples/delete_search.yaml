@@ -55,7 +55,7 @@ endpoints:
     declare:
       resultsIds: !c
         collects:
-          - take: [0, 1]
+          - take: [0, 20]
             from: '${v:createdName}${x:start_pad(${p:createdId}, 6, "0")}'
             as: '_ids'
         then: '${p:_ids}'

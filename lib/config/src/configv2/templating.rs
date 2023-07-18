@@ -249,7 +249,7 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
     /// key-value pairs.
     pub fn evaluate(&self, data: Cow<'_, serde_json::Value>) -> Result<String, EvalExprError> {
         match self {
-            Self::Literal { value } => Ok(value.clone()),
+            Self::Literal { value } => Ok(value.trim_matches('"').to_owned()),
             Self::NeedsProviders { script, __dontuse } => script
                 .iter()
                 .map(|e| match e {

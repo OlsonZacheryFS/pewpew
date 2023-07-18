@@ -8,6 +8,9 @@ select: <i>select</i>
 
 Queries define how some input data should be sent to a target with expressions.
 
+Queries are not Templated. Provider values are read simply by the name of the provider, and
+var values are accessed through the `_v` object.
+
 Some special values are available to Query expressions.
 
 - `request`: Contains data about the HTTP request that was sent. Has the properties

@@ -2,6 +2,11 @@
 
 Expressions are inline JavaScript expressions executed in an embedded JS runtime.
 
+Expressions within [R-Templates](../common-types/templates.md#template-types) can themselves be
+templated to access provider and var data. Expressions within [Queries](../common-types/queries.md)
+are not templated, though standard JS string interpolation is possible; provider values are read
+simply by the provider name, and vars are accessed through the `_v` object.
+
 Expressions are most commonly used to access data from a provider
 (via [templates](../common-types/templates.md)) or to transform data from an HTTP response to be
 sent into a provider. In addition to standard JS operations, some helper functions are provided.

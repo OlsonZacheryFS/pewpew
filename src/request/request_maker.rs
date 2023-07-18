@@ -147,7 +147,7 @@ impl RequestMaker {
                 let key = HeaderName::from_bytes(k.as_bytes())
                     .map_err(|e| RecoverableError::BodyErr(Arc::new(e)))?;
                 let value = HeaderValue::from_str(
-                    &v.evaluate(Cow::Borrowed(template_values.as_json()) /*, None*/)
+                    &v.evaluate(Cow::Borrowed(template_values.as_json()))
                         .expect("TODO"),
                 )
                 .map_err(|e| RecoverableError::BodyErr(Arc::new(e)))?;
