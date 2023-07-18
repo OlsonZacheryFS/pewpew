@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Logger<VD: Bool = True> {
-    pub query: Option<super::query::Query>,
+    pub query: Option<super::query::Query<VD>>,
     pub to: LogTo<VD>,
     #[serde(default)]
     pub pretty: bool,
@@ -22,7 +22,7 @@ impl PropagateVars for Logger<False> {
 
     fn insert_vars(self, vars: &super::Vars<True>) -> Result<Self::Data<True>, super::VarsError> {
         Ok(Logger {
-            query: self.query,
+            query: self.query.insert_vars(vars)?,
             to: self.to.insert_vars(vars)?,
             pretty: self.pretty,
             limit: self.limit,

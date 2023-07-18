@@ -230,7 +230,7 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
                     .collect::<Result<Vec<_>, _>>()?;
                 Either::B(zip_all::zip_all(streams).map_ok(|js| {
                     js.into_iter()
-                        .map(|(j, ar)| (j.to_string(), ar))
+                        .map(|(j, ar)| (j.to_string().trim_matches('"').to_owned(), ar))
                         .reduce(|mut acc, e| {
                             acc.0.push_str(&e.0);
                             acc.1.extend(e.1);

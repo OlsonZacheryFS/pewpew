@@ -10,23 +10,48 @@ use itertools::Itertools;
 use serde::Deserialize;
 use serde_json::Value as SJVal;
 use std::{
-    cell::RefCell,
+    cell::{OnceCell, RefCell},
     collections::{BTreeMap, VecDeque},
     convert::{TryFrom, TryInto},
     fmt,
+    marker::PhantomData,
     rc::Rc,
     sync::Arc,
 };
 
-use crate::error::{EvalExprError, EvalExprErrorInner, QueryGenError};
+use crate::{
+    error::{EvalExprError, EvalExprErrorInner, QueryGenError},
+    templating::{Bool, False, True},
+};
+
+use super::{PropagateVars, VarValue, Vars};
 
 type SelectTmp = Select<Arc<str>>;
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(try_from = "QueryTmp")]
-pub struct Query(DiplomaticBag<QueryInner>);
+pub struct Query<VD: Bool = True>(DiplomaticBag<QueryInner>, PhantomData<VD>);
 
-impl Query {
+impl PropagateVars for Query<False> {
+    type Data<VD: Bool> = Query<VD>;
+
+    fn insert_vars(self, vars: &Vars<True>) -> Result<Self::Data<True>, crate::error::VarsError> {
+        let v = SJVal::from(VarValue::Map(vars.clone()));
+
+        self.0.as_ref().and_then(|_, q| {
+            let v = q.vars.get_or_init(|| Arc::new(v));
+            let js = JsValue::from_json(&v, &mut q.ctx.borrow_mut()).expect("TODO");
+            q.ctx
+                .borrow_mut()
+                .register_global_property("_v", js, Attribute::READONLY);
+        });
+
+        let Self(q, _) = self;
+        Ok(Query(q, PhantomData))
+    }
+}
+
+impl Query<True> {
     pub fn query(
         &self,
         data: Arc<SJVal>,
@@ -38,7 +63,9 @@ impl Query {
                 .into_iter())
         })
     }
+}
 
+impl<VD: Bool> Query<VD> {
     pub fn simple(
         select: String,
         for_each: Vec<String>,
@@ -77,14 +104,14 @@ impl Query {
     }
 }
 
-impl TryFrom<QueryTmp> for Query {
+impl<VD: Bool> TryFrom<QueryTmp> for Query<VD> {
     type Error = QueryGenError;
 
     fn try_from(value: QueryTmp) -> Result<Self, Self::Error> {
         DiplomaticBag::new(move |_| QueryInner::try_from(Rc::new(value)))
             .transpose()
             .map_err(DiplomaticBag::into_inner)
-            .map(Self)
+            .map(|qi| Self(qi, PhantomData))
     }
 }
 
@@ -94,11 +121,16 @@ struct QueryInner {
     r#where: Option<Gc<CodeBlock>>,
     ctx: RefCell<Context>,
     src: Rc<QueryTmp>,
+    vars: OnceCell<Arc<SJVal>>,
 }
 
 impl Clone for QueryInner {
     fn clone(&self) -> Self {
-        Self::try_from(Rc::clone(&self.src)).expect("was already made")
+        let q = Self::try_from(Rc::clone(&self.src)).expect("was already made");
+        if let Some(vars) = self.vars.get() {
+            let _ = q.vars.set(vars.clone());
+        }
+        q
     }
 }
 
@@ -143,6 +175,7 @@ impl TryFrom<Rc<QueryTmp>> for QueryInner {
             r#where,
             ctx,
             src: value,
+            vars: OnceCell::new(),
         })
     }
 }

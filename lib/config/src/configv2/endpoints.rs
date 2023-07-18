@@ -35,14 +35,14 @@ pub struct Endpoint<VD: Bool = True> {
     #[serde(default = "BTreeMap::new")]
     pub tags: BTreeMap<String, Template<String, Regular, VD>>,
     pub url: Template<String, Regular, VD>,
-    #[serde(default)]
-    pub provides: BTreeMap<Arc<str>, EndpointProvides>,
+    #[serde(default = "BTreeMap::new")]
+    pub provides: BTreeMap<Arc<str>, EndpointProvides<VD>>,
     // book says optional, check what the behavior should be and if this
     // should default
     #[serde(default)]
     pub on_demand: bool,
-    #[serde(default, with = "tuple_vec_map")]
-    pub logs: Vec<(String, EndpointLogs)>,
+    #[serde(default = "Vec::new", with = "tuple_vec_map")]
+    pub logs: Vec<(String, EndpointLogs<VD>)>,
     pub max_parallel_requests: Option<NonZeroUsize>,
     #[serde(default)]
     pub no_auto_returns: bool,
@@ -62,9 +62,9 @@ impl PropagateVars for Endpoint<False> {
             peak_load: self.peak_load.insert_vars(vars)?,
             tags: self.tags.insert_vars(vars)?,
             url: self.url.insert_vars(vars)?,
-            provides: self.provides,
+            provides: self.provides.insert_vars(vars)?,
             on_demand: self.on_demand,
-            logs: self.logs,
+            logs: self.logs.insert_vars(vars)?,
             max_parallel_requests: self.max_parallel_requests,
             no_auto_returns: self.no_auto_returns,
             request_timeout: self.request_timeout.insert_vars(vars)?,
@@ -74,14 +74,9 @@ impl PropagateVars for Endpoint<False> {
 
 impl Endpoint<True> {
     pub fn get_required_providers(&self) -> BTreeSet<Arc<str>> {
-        self.declare
-            .values()
-            .flat_map(|v| v.get_required_providers().into_iter())
-            .chain(
-                self.headers
-                    .iter()
-                    .flat_map(|(_, h)| h.get_required_providers()),
-            )
+        self.headers
+            .iter()
+            .flat_map(|(_, h)| h.get_required_providers())
             .chain(
                 self.body
                     .as_ref()
@@ -248,31 +243,58 @@ impl TryFrom<&str> for HitsPerMinute {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EndpointProvides {
-    query: Query,
+pub struct EndpointProvides<VD: Bool> {
+    query: Query<VD>,
     pub(crate) send: ProviderSend,
 }
 
-impl EndpointProvides {
+impl<VD: Bool> EndpointProvides<VD> {
     pub fn set_send_behavior(&mut self, send: ProviderSend) {
         self.send = send
     }
 }
 
-impl From<EndpointProvides> for (Query, ProviderSend) {
-    fn from(EndpointProvides { query, send }: EndpointProvides) -> Self {
+impl PropagateVars for EndpointProvides<False> {
+    type Data<VD: Bool> = EndpointProvides<VD>;
+
+    fn insert_vars(
+        self,
+        vars: &super::Vars<True>,
+    ) -> Result<Self::Data<True>, crate::error::VarsError> {
+        Ok(EndpointProvides {
+            query: self.query.insert_vars(vars)?,
+            send: self.send,
+        })
+    }
+}
+
+impl From<EndpointProvides<True>> for (Query<True>, ProviderSend) {
+    fn from(EndpointProvides { query, send }: EndpointProvides<True>) -> Self {
         (query, send)
     }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(transparent)]
-pub struct EndpointLogs {
-    pub(crate) query: Query,
+pub struct EndpointLogs<VD: Bool> {
+    pub(crate) query: Query<VD>,
 }
 
-impl From<EndpointLogs> for (Query, ProviderSend) {
-    fn from(value: EndpointLogs) -> Self {
+impl PropagateVars for EndpointLogs<False> {
+    type Data<VD: Bool> = EndpointLogs<VD>;
+
+    fn insert_vars(
+        self,
+        vars: &super::Vars<True>,
+    ) -> Result<Self::Data<True>, crate::error::VarsError> {
+        Ok(EndpointLogs {
+            query: self.query.insert_vars(vars)?,
+        })
+    }
+}
+
+impl From<EndpointLogs<True>> for (Query<True>, ProviderSend) {
+    fn from(value: EndpointLogs<True>) -> Self {
         (value.query, ProviderSend::Block)
     }
 }
@@ -413,7 +435,7 @@ mod tests {
     #[test]
     fn test_endpoint() {
         static TEST: &str = r#"url: example.com"#;
-        let Endpoint::<False> {
+        let Endpoint::<True> {
             declare,
             headers,
             body,
@@ -429,7 +451,10 @@ mod tests {
             no_auto_returns,
             request_timeout,
             ..
-        } = from_yaml(TEST).unwrap();
+        } = from_yaml::<Endpoint<False>>(TEST)
+            .unwrap()
+            .insert_vars(&BTreeMap::new())
+            .unwrap();
         assert!(declare.is_empty());
         assert!(headers.is_empty());
         assert_eq!(body, None);
