@@ -339,7 +339,7 @@ impl BucketGroupStats {
                     "mean": mean,
                     "stddev": stddev,
                     "tags": tags.iter()
-                        .filter(|(k, _)| k.as_str() != "method" && k.as_str() != "url")
+                        .filter(|(k, _)| &***k != "method" && &***k != "url")
                         .collect::<BTreeMap<_, _>>(),
                 });
                 let piece = format!("{output}\n");
@@ -556,7 +556,7 @@ impl Stats {
     }
 }
 
-type Tags = BTreeMap<String, String>;
+type Tags = BTreeMap<Arc<str>, String>;
 
 // get the current time as a unix epoch
 fn get_epoch() -> u64 {

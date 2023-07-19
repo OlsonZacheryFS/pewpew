@@ -62,7 +62,7 @@ use std::{
 
 struct Endpoints {
     inner: Vec<(
-        BTreeMap<String, String>,
+        BTreeMap<Arc<str>, String>,
         request::EndpointBuilder,
         BTreeSet<Arc<str>>,
     )>,
@@ -80,7 +80,7 @@ impl Endpoints {
 
     fn append(
         &mut self,
-        endpoint_tags: BTreeMap<String, String>,
+        endpoint_tags: BTreeMap<Arc<str>, String>,
         builder: request::EndpointBuilder,
         provides: BTreeSet<Arc<str>>,
         required_providers: BTreeSet<Arc<str>>,
@@ -101,7 +101,7 @@ impl Endpoints {
         response_providers: &BTreeSet<Arc<str>>,
     ) -> Result<Vec<impl Future<Output = Result<(), TestError>> + Send>, TestError>
     where
-        F: Fn(&BTreeMap<String, String>) -> bool,
+        F: Fn(&BTreeMap<Arc<str>, String>) -> bool,
     {
         let mut endpoints: BTreeMap<_, _> = self
             .inner
@@ -941,11 +941,14 @@ ${response.body != '' ? JSON.stringify(response.body) : ''}\n\n`"#
             )
         })
         .collect();
-    let filter_fn = move |tags: &BTreeMap<String, String>| -> bool {
+    let filter_fn = move |tags: &BTreeMap<Arc<str>, String>| -> bool {
         filters.is_empty()
             || filters.iter().any(|(is_eq, key, regex)| {
                 // "should it match" compared to "does it match"
-                *is_eq == tags.get(key).map_or(false, |left| regex.is_match(left))
+                *is_eq
+                    == tags
+                        .get::<str>(key)
+                        .map_or(false, |left| regex.is_match(left))
             })
     };
 

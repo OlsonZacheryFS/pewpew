@@ -30,7 +30,7 @@ pub(super) struct BodyHandler {
     pub(super) provider_delays: ProviderDelays,
     pub(super) stats_tx: StatsTx,
     pub(super) status: u16,
-    pub(super) tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
+    pub(super) tags: Arc<BTreeMap<Arc<str>, Template<String, Regular, True>>>,
     pub(super) template_values: TemplateValues,
 }
 
@@ -66,13 +66,13 @@ impl BodyHandler {
         };
         let template_values = Arc::new(template_values.0);
         let template_values2 = template_values.clone();
-        let tags: BTreeMap<String, String> = self
+        let tags: BTreeMap<Arc<str>, String> = self
             .tags
             .iter()
             .filter_map(|(k, t)| {
                 t.evaluate(Cow::Borrowed(&*template_values))
                     .ok()
-                    .map(|v| (k.clone(), v))
+                    .map(|v| (Arc::clone(k), v))
             })
             .collect();
         let tags = Arc::new(tags);

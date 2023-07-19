@@ -622,7 +622,7 @@ pub struct Endpoint {
     on_demand_streams: OnDemandStreams,
     outgoing: Vec<Outgoing>,
     provides: Vec<Outgoing>,
-    tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
+    tags: Arc<BTreeMap<Arc<str>, Template<String, Regular, True>>>,
     stats_tx: StatsTx,
     stream_collection: StreamCollection,
     timeout: Duration,

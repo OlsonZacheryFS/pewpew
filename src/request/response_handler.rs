@@ -9,7 +9,7 @@ pub(super) struct ResponseHandler {
     pub(super) outgoing: Arc<Vec<Outgoing>>,
     pub(super) now: Instant,
     pub(super) stats_tx: StatsTx,
-    pub(super) tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
+    pub(super) tags: Arc<BTreeMap<Arc<str>, Template<String, Regular, True>>>,
 }
 
 impl ResponseHandler {

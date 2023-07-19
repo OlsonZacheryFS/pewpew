@@ -46,7 +46,7 @@ pub(super) struct RequestMaker {
     pub(super) stats_tx: StatsTx,
     pub(super) no_auto_returns: bool,
     pub(super) outgoing: Arc<Vec<Outgoing>>,
-    pub(super) tags: Arc<BTreeMap<String, Template<String, Regular, True>>>,
+    pub(super) tags: Arc<BTreeMap<Arc<str>, Template<String, Regular, True>>>,
     pub(super) timeout: Duration,
 }
 
@@ -63,7 +63,7 @@ impl ProviderDelays {
         self.inner.push(name)
     }
 
-    pub(super) fn log(self, tags: &Arc<BTreeMap<String, String>>, stats_tx: &StatsTx) {
+    pub(super) fn log(self, tags: &Arc<BTreeMap<Arc<str>, String>>, stats_tx: &StatsTx) {
         for provider in self.inner {
             let kind = stats::StatKind::RecoverableError(RecoverableError::ProviderDelay(provider));
             let _ = stats_tx.unbounded_send(
@@ -329,8 +329,7 @@ impl RequestMaker {
                     .filter_map(|(k, v)| {
                         v.evaluate(Cow::Borrowed(template_values2.as_json()))
                             .ok()
-                            .map(move |v| (k.clone(), v))
-                        //Some((k.clone(), v.get().clone()))
+                            .map(move |v| (Arc::clone(k), v))
                     })
                     .collect();
                 let tags = Arc::new(tags);

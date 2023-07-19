@@ -33,7 +33,7 @@ pub struct Endpoint<VD: Bool = True> {
     pub method: Method,
     pub peak_load: Option<Template<HitsPerMinute, VarsOnly, VD>>,
     #[serde(default = "BTreeMap::new")]
-    pub tags: BTreeMap<String, Template<String, Regular, VD>>,
+    pub tags: BTreeMap<Arc<str>, Template<String, Regular, VD>>,
     pub url: Template<String, Regular, VD>,
     #[serde(default = "BTreeMap::new")]
     pub provides: BTreeMap<Arc<str>, EndpointProvides<VD>>,
