@@ -33,6 +33,7 @@ pub use providers::ProviderType;
 
 #[derive(Debug, Deserialize)]
 pub struct LoadTest<VD: Bool = True, ED: Bool = True> {
+    #[serde(default = "Config::default")]
     pub config: config::Config<VD>,
     #[serde(bound = "load_pattern::LoadPattern<VD>: serde::de::DeserializeOwned")]
     load_pattern: Option<load_pattern::LoadPattern<VD>>,

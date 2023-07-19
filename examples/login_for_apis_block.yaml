@@ -3,9 +3,6 @@
 
 # This version will initially fill the provider and will then block once we have enough to use. Alternative to `on_demand`
 
-config:
-  client: {}
-
 vars:
   port: ${e:PORT}
   username: test-user

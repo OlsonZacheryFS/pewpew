@@ -8,10 +8,19 @@ use super::{
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(default)]
 pub struct Config<VD: Bool = True> {
     pub client: Client<VD>,
-    #[serde(default = "Default::default")]
     pub general: General<VD>,
+}
+
+impl<VD: Bool> Default for Config<VD> {
+    fn default() -> Self {
+        Self {
+            client: Default::default(),
+            general: Default::default(),
+        }
+    }
 }
 
 impl PropagateVars for Config<False> {
@@ -27,6 +36,7 @@ impl PropagateVars for Config<False> {
 
 /// Customization Parameters for the HTTP client
 #[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(default)]
 pub struct Client<VD: Bool> {
     #[serde(default = "default_timeout")]
     pub request_timeout: Template<Duration, VarsOnly, VD>,
@@ -34,6 +44,16 @@ pub struct Client<VD: Bool> {
     pub(crate) headers: Headers<VD>,
     #[serde(default = "default_keepalive")]
     pub keepalive: Template<Duration, VarsOnly, VD>,
+}
+
+impl<VD: Bool> Default for Client<VD> {
+    fn default() -> Self {
+        Self {
+            request_timeout: default_timeout(),
+            headers: Headers::new(),
+            keepalive: default_keepalive(),
+        }
+    }
 }
 
 impl PropagateVars for Client<False> {
@@ -119,6 +139,28 @@ mod tests {
     use super::*;
     use crate::configv2::templating::{False, Template};
     use serde_yaml::from_str as from_yaml;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn default_matches() {
+        // Ensure serde defaults match up with standard defaults.
+        static INPUT: &str = "";
+        let c: Client<True> = from_yaml::<Client<False>>(INPUT)
+            .unwrap()
+            .insert_vars(&BTreeMap::new())
+            .unwrap();
+        assert_eq!(c, Client::default());
+        let g: General<True> = from_yaml::<General<False>>(INPUT)
+            .unwrap()
+            .insert_vars(&BTreeMap::new())
+            .unwrap();
+        assert_eq!(g, General::default());
+        let c: Config<True> = from_yaml::<Config<False>>(INPUT)
+            .unwrap()
+            .insert_vars(&BTreeMap::new())
+            .unwrap();
+        assert_eq!(c, Config::default());
+    }
 
     #[test]
     fn test_client() {

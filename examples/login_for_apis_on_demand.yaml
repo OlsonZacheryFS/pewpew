@@ -3,9 +3,6 @@
 
 # This version will initially fill the provider and will re-use them. Alternative to `send: block`
 
-config:
-  client: {}
-
 vars:
   port: ${e:PORT}
   username: test-user

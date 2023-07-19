@@ -3,9 +3,6 @@
 
 # This version will always put in new sessions and slowly replace the old ones
 
-config:
-  client: {}
-
 vars:
   port: ${e:PORT}
   username: test-user
