@@ -7,7 +7,12 @@ use crate::{
 use ether::Either;
 use futures::{Stream, StreamExt, TryStreamExt};
 use serde::Deserialize;
-use std::{collections::BTreeMap, error::Error as StdError, sync::Arc, task::Poll};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    error::Error as StdError,
+    sync::Arc,
+    task::Poll,
+};
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 pub enum Declare<VD: Bool> {
@@ -127,6 +132,24 @@ impl PropagateVars for Declare<False> {
 }
 
 impl Declare<True> {
+    pub fn get_required_providers(&self) -> BTreeSet<Arc<str>> {
+        match self {
+            Self::Expr(t) => t.get_required_providers(),
+            Self::Collects { collects, then } => {
+                let ases: BTreeSet<_> = collects.iter().map(|c| c.r#as.as_str()).collect();
+                collects
+                    .iter()
+                    .flat_map(|c| c.from.get_required_providers())
+                    .chain(
+                        then.get_required_providers()
+                            .into_iter()
+                            .filter(|k| !ases.contains::<str>(k)),
+                    )
+                    .collect()
+            }
+        }
+    }
+
     pub fn into_stream<P, Ar, E>(
         self,
         providers: Arc<BTreeMap<Arc<str>, P>>,

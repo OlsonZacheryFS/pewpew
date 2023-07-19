@@ -84,6 +84,14 @@ impl Endpoint<True> {
                     .into_iter(),
             )
             .chain(self.url.get_required_providers().into_iter())
+            // need to figure this out; removing it can mess up the peak load detection,
+            // but with it, extra values can be taken from providers that are only used
+            // in declare.
+            .chain(
+                self.declare
+                    .values()
+                    .flat_map(|b| b.get_required_providers()),
+            )
             .collect()
     }
 
