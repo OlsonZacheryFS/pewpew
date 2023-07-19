@@ -253,12 +253,14 @@ impl<T: TemplateType<ProvAllowed = True>> Template<String, T, True, True> {
             Self::NeedsProviders { script, __dontuse } => script
                 .iter()
                 .map(|e| match e {
-                    ExprSegment::Eval(x) => x.evaluate(data.clone()),
+                    ExprSegment::Eval(x) => x
+                        .evaluate(data.clone())
+                        .map(|s| s.trim_matches('"').to_owned()),
                     ExprSegment::Str(s) => Ok(s.to_string()),
                     ExprSegment::ProvDirect(p) => data
                         .as_object()
                         .and_then(|o| o.get::<str>(p))
-                        .map(ToString::to_string)
+                        .map(|o| o.to_string().trim_matches('"').to_owned())
                         .ok_or_else(|| EvalExprError(format!("provider data {p} not found"))),
                 })
                 .collect(),

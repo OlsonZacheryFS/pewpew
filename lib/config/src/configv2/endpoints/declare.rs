@@ -225,8 +225,15 @@ impl Declare<True> {
             (
                 match v {
                     serde_json::Value::String(s) => match serde_json::from_str(&s) {
+                        Ok(serde_json::Value::String(s)) => {
+                            log::debug!("Using literal string {s:?} as the json value");
+                            serde_json::Value::String(s)
+                        }
                         Ok(v) => v,
-                        Err(_) => serde_json::Value::String(s),
+                        Err(e) => {
+                            log::debug!("String {s:?} is not valid JSON ({e}); reusing same string value");
+                            serde_json::Value::String(s)
+                        }
                     },
                     other => other,
                 },

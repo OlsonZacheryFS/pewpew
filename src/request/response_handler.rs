@@ -79,9 +79,17 @@ impl ResponseHandler {
                 )
                 .map_ok(|(_, body_buffer)| {
                     let body_string = str::from_utf8(&body_buffer).unwrap_or("<<binary data>>");
-                    let value = json::from_str(body_string)
-                        .ok()
-                        .unwrap_or_else(|| json::Value::String(body_string.into()));
+                    let value = match json::from_str(body_string) {
+                            Ok(json::Value::String(s)) => {
+                                log::info!("using literal string {s:?} for json");
+                                json::Value::String(s)
+                            }
+                            Ok(other) => other,
+                            Err(e) => {
+                                log::warn!("error converting string {body_string:?} to json ({e}); using original string as fallback");
+                                json::Value::String(body_string.to_owned())
+                            }
+                        };
                     Some(value)
                 })
                 .a()

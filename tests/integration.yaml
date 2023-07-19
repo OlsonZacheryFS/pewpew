@@ -40,7 +40,7 @@ endpoints:
             as: _b
         then: ${p:_b}
     url: http://localhost:${v:port}/
-    body: !str '{"a": ${p:a}, "b": "${v:b}", "c": ${p:c}, "e": ${p:e}, "e2": ${v:e2}, "f": ${p:f}}'
+    body: !str '{"a": ${p:a}, "b": "${v:b}", "c": ${p:c}, "e": ${p:e}, "e2": ${v:e2}, "f": "${p:f}"}'
     peak_load: 1.1hps
     headers:
       Content-Type: application/json
