@@ -761,6 +761,10 @@ mod builtins {
             fn from_js(js: &JsValue, ctx: &mut Context) -> JsResult<Self> {
                 match js {
                     JsValue::Integer(i) => Ok(*i as i64),
+                    JsValue::Rational(r) => {
+                        log::trace!("casting float to int");
+                        Ok(*r as i64)
+                    }
                     _ => Err(ctx.construct_type_error("not an int")),
                 }
             }
