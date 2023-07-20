@@ -356,6 +356,19 @@ of this string then it will be truncated from the right. If the needed padding i
 </tr>
 <tr>
 <td>
+<code>stwrap(<i>string</i>)</code>
+</td>
+<td>
+
+String Wrap. "Wraps" a String by adding a `"` to each end. `${x:_}` interpolations inside of an
+[R-Template](./templates.md#template-types) will insert the raw value of a String. This function
+can be used if surrounding `""` are desired, particularly if the resulting string is to be
+placed in a context that would be interpreted as JSON.
+
+</td>
+</tr>
+<tr>
+<td>
 <code>val_eq(<i>value1</i>, <i>value2</i>)</code>
 </td>
 <td>
