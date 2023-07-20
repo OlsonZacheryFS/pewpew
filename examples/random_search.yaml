@@ -150,13 +150,13 @@ endpoints:
             as: _dates
         then: ${p:_dates} # Get two dates in case we need them for hasFromDate
       # Based on the random percentages, decide whether to includes these in the search
-      hasCountry: !x ${x:random(0,100) < ${v:percentageCountry}}
-      hasState: !x ${x:random(0,100) < ${v:percentageState}}
-      hasFromDate: !x ${x:random(0,100) < ${v:percentageFromDate}}
-      hasName: !x ${x:random(0,100) < ${v:percentageName}}
-      hasGender: !x ${x:random(0,100) < ${v:percentageGender}}
-      includeProperties: !x ${x:random(0,100) < ${v:percentageIncludeProperties}}
-      goPage2: !x ${x:random(0,100) < 7}
+      hasCountry: !x '${x:random(0,100,${p:null}) < ${v:percentageCountry}}'
+      hasState: !x '${x:random(0,100,${p:null}) < ${v:percentageState}}'
+      hasFromDate: !x '${x:random(0,100,${p:null}) < ${v:percentageFromDate}}'
+      hasName: !x '${x:random(0,100,${p:null}) < ${v:percentageName}}'
+      hasGender: !x '${x:random(0,100,${p:null}) < ${v:percentageGender}}'
+      includeProperties: !x '${x:random(0,100,${p:null}) < ${v:percentageIncludeProperties}}'
+      goPage2: !x '${x:random(0,100,${p:null}) < 7}'
     headers:
       Content-Type: application/json
     body: !str >-
@@ -171,7 +171,7 @@ endpoints:
         "includeProperties": ${p:includeProperties},
         "pageNumber": ${x:${p:goPage2} ? 2 : 1},
         "results": 50,
-        "totalCount": ${x:random(0,1000)}
+        "totalCount": ${x:random(0,1000,${p:null})}
       }
     peak_load: ${v:peakLoadSearch}hpm
     load_pattern: # Override the default load pattern for this endpoint

@@ -24,6 +24,46 @@ sent into a provider. In addition to standard JS operations, some helper functio
 
 ## Helper functions
 
+### "Dummy" parameters
+
+Any `${x:_}` interpolation within an [R-Template](./templates.md#template-types) that does not rely
+on any providers will be statically evaluated once to reduce redundant JS execution. While this
+does not cause issues in most cases, there are some functions (such as `random()`) that can return
+different values for the same input. This means that in the following example
+[declare](../endpoints-section.md#declare-subsection),
+
+```
+declare:
+  foo: !c
+    collects:
+      - take: 5
+        from: ${x:random(0, 100)}
+        as: _nums
+    then: ${x:entries(${p:_nums})}
+```
+
+which may be intended to continually yield enumerated arrays of 5 random numbers, will instead
+generate a single random number, and repeat that same number continually. In some cases, this
+behavior may be desired, but not always. Instead:
+
+```
+declare:
+  foo: !c
+    collects:
+      - take: 5
+        from: ${x:random(0, 100, ${p:null})}
+        as: _nums
+    then: ${x:entries(${p:_nums})}
+```
+
+Since this declare relies on a provider value, `random()` will be called each time. The dummy
+value is not used internally.
+
+This limitation/workaround **only** applies to `${x:_}` segments of templates. Query expressions
+will still be evaulated normally.
+
+### Function list
+
 <table>
 <thead>
 <tr>
@@ -131,6 +171,10 @@ would return `null`.
 <tr>
 <td>
 <code>epoch(<i>unit</i>)</code>
+
+or
+
+<code>epoch(<i>unit</i>, <i>dummy</i>)</code>
 </td>
 <td>
 
@@ -267,6 +311,10 @@ Converts a string or other value into an floating point number (`f64`). If the v
 <td>
 
 <code>random(<i>start</i>, </i>end</i>)</code>
+
+or
+
+<code>random(<i>start</i>, </i>end</i>, <i>dummy</i>)</code>
 
 </td>
 <td>

@@ -1164,6 +1164,7 @@ fn get_providers_from_config(
         };
         providers.insert(name.get(), provider);
     }
+    providers.insert(Arc::from("null"), providers::null("null"));
     Ok((providers, response_providers))
 }
 

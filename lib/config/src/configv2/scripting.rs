@@ -463,7 +463,7 @@ mod builtins {
     //! IMPORTANT: Do **NOT** let these functions panic if at all possible
 
     use crate::shared::{encode::Encoding, Epoch};
-    use helper::{AnyAsString, NumType, OrNull};
+    use helper::{AnyAsString, AnyNull, NumType, OrNull};
     use rand::{thread_rng, Rng};
     use regex::Regex;
     use scripting_macros::boa_fn;
@@ -513,7 +513,7 @@ mod builtins {
     }
 
     #[boa_fn]
-    fn epoch(e: Epoch) -> String {
+    fn epoch(e: Epoch, _: Option<AnyNull>) -> String {
         e.get().to_string()
     }
 
@@ -641,7 +641,7 @@ mod builtins {
     }
 
     #[boa_fn]
-    fn random(min: NumType, max: NumType) -> NumType {
+    fn random(min: NumType, max: NumType, _: Option<AnyNull>) -> NumType {
         match (min, max) {
             (NumType::Int(i), NumType::Int(j)) => NumType::Int(thread_rng().gen_range(i..j)),
             (i, j) => {
@@ -775,6 +775,14 @@ mod builtins {
                     }
                     _ => Err(ctx.construct_type_error("not an int")),
                 }
+            }
+        }
+
+        pub(super) struct AnyNull;
+
+        impl JsInput<'_> for AnyNull {
+            fn from_js(_: &JsValue, _: &mut Context) -> JsResult<Self> {
+                Ok(Self)
             }
         }
 

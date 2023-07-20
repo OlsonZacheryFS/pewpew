@@ -156,6 +156,17 @@ pub fn range(rp: providers::RangeProvider, name: &str) -> Provider {
     Provider::new(None, rx, tx)
 }
 
+pub fn null(name: &str) -> Provider {
+    let limit = channel::Limit::statik(500);
+    let (tx, rx) = channel::channel(limit, false, name);
+
+    let prime_tx = stream::repeat(json::Value::Null)
+        .map(Ok)
+        .forward(tx.clone());
+    tokio::spawn(prime_tx);
+    Provider::new(None, rx, tx)
+}
+
 #[derive(Clone, Debug)]
 pub struct Logger {
     limit: Option<Arc<AtomicIsize>>,

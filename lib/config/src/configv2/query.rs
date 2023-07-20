@@ -202,6 +202,7 @@ impl QueryInner {
         let ctx = &mut ctx;
         let data = data.as_object().unwrap();
         data.iter()
+            .filter(|(n, _)| *n != "null")
             .map(|(n, o)| {
                 (
                     n,

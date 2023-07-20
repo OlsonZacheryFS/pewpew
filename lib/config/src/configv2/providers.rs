@@ -25,16 +25,20 @@ pub struct ProviderName(Arc<str>);
 #[error("reserved provider name {0:?} found")]
 pub struct ReservedProviderName(&'static str);
 
+macro_rules! p_names {
+    ($s:ident, $($n:literal),*) => {
+        match $s {
+            $($n => Err(ReservedProviderName($n)),)*
+            other => Ok(ProviderName(Arc::from(other)))
+        }
+    }
+}
+
 impl FromStr for ProviderName {
     type Err = ReservedProviderName;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "request" => Err(ReservedProviderName("request")),
-            "response" => Err(ReservedProviderName("response")),
-            "stats" => Err(ReservedProviderName("stats")),
-            other => Ok(Self(Arc::from(other))),
-        }
+        p_names!(s, "request", "response", "stats", "null")
     }
 }
 

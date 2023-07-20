@@ -14,11 +14,8 @@ a provider it "pops" a value from the beginning of the queue and when an endpoin
 provides data to a provider it is "pushed" to the end of the queue. Every provider
 has an internal buffer with has a soft limit on how many items can be stored.
 
-> **Note:** This bit can probably be removed, as the new templates have a specific syntax
-> for reading provider values.
-> 
-> A *provider_name* is any string except for "request", "response", "stats" and "for_each",
-> which are reserved. 
+> A *provider_name* is any valid js identifier, except for "request", "response", "stats" and
+> "for_each", (as well as "null"), which are reserved.
 
 Example:
 ```yaml
@@ -299,3 +296,19 @@ providers:
 ```
 
 In this case `foo` will provide the valuels `-50`, `-48`, `-46`, etc. until it yields `100`.
+
+## null
+
+A special predefined `null` provider (named `"null"`) is also available. The `null` provider
+endlessly yields `null` values. Is it equivalent to
+
+```yaml
+providers:
+  null: !list
+    repeat: true
+    values:
+      - null
+```
+
+This provider is mainly for sending [dummy values](./common-types/expressions.md#dummy-parameters)
+to expression function.
