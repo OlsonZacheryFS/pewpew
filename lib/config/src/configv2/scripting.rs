@@ -129,7 +129,10 @@ impl EvalExpr {
             .collect();
         self.ctx.as_ref().and_then(move |_, (ctx, efn)| {
             let ctx = &mut *ctx.borrow_mut();
-            Ok(Self::eval_raw::<()>(ctx, efn, values)?.0.to_string())
+            Ok(match Self::eval_raw::<()>(ctx, efn, values)?.0 {
+                serde_json::Value::String(s) => s,
+                other => other.to_string(),
+            })
         })
     }
 
@@ -701,6 +704,11 @@ mod builtins {
 
         pad_chars.push_str(&s);
         pad_chars
+    }
+
+    #[boa_fn]
+    fn stwrap(s: &str) -> String {
+        format!("\"{s}\"")
     }
 
     #[boa_fn]
